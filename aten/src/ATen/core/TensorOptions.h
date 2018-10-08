@@ -113,10 +113,11 @@ struct CAFFE2_API TensorOptions {
   }
 
   /// Sets the device of the `TensorOptions`.
-  TensorOptions& device(Device device) {
-    device_ = device;
-    has_device_ = true;
-    return *this;
+  TensorOptions device(Device device) const noexcept {
+    TensorOptions r = *this;
+    r.device_ = device;
+    r.has_device_ = true;
+    return r;
   }
 
   /// Sets the device of the `TensorOptions` to CUDA, and then sets the device
@@ -124,36 +125,40 @@ struct CAFFE2_API TensorOptions {
   ///
   /// TODO: This function encourages bad behavior (assuming CUDA is
   /// the only device that matters).  Get rid of it / rename it.
-  TensorOptions& device_index(int32_t device_index) {
+  TensorOptions device_index(int32_t device_index) const noexcept {
     return device({Device::Type::CUDA, device_index});
   }
 
   /// Sets the dtype of the `TensorOptions`.
-  TensorOptions& dtype(ScalarType dtype) {
-    dtype_ = dtype;
-    has_dtype_ = true;
-    return *this;
+  TensorOptions dtype(ScalarType dtype) const noexcept {
+    TensorOptions r = *this;
+    r.dtype_ = dtype;
+    r.has_dtype_ = true;
+    return r;
   }
 
   /// Sets the layout of the `TensorOptions`.
-  TensorOptions& layout(Layout layout) {
-    layout_ = layout;
-    has_layout_ = true;
-    return *this;
+  TensorOptions layout(Layout layout) const noexcept {
+    TensorOptions r = *this;
+    r.layout_ = layout;
+    r.has_layout_ = true;
+    return r;
   }
 
   /// Sets the `requires_grad` property of the `TensorOptions`.
-  TensorOptions& requires_grad(bool requires_grad) {
-    requires_grad_ = requires_grad;
-    has_requires_grad_ = true;
-    return *this;
+  TensorOptions requires_grad(bool requires_grad) const noexcept {
+    TensorOptions r = *this;
+    r.requires_grad_ = requires_grad;
+    r.has_requires_grad_ = true;
+    return r;
   }
 
   /// Sets the `is_variable` property on the `TensorOptions`.
-  TensorOptions& is_variable(bool is_variable) {
-    is_variable_ = is_variable;
-    has_is_variable_ = true;
-    return *this;
+  TensorOptions is_variable(bool is_variable) const noexcept {
+    TensorOptions r = *this;
+    r.is_variable_ = is_variable;
+    r.has_is_variable_ = true;
+    return r;
   }
 
   /// Returns the device of the `TensorOptions`.
