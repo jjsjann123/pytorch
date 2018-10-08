@@ -34,6 +34,7 @@ from torch._six import string_classes, inf
 import torch.backends.cudnn
 import torch.backends.mkl
 
+raise Exception
 
 torch.set_default_tensor_type('torch.DoubleTensor')
 torch.backends.cudnn.disable_global_flags()
