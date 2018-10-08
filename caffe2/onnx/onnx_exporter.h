@@ -9,8 +9,6 @@
 #include <unordered_map>
 #include <vector>
 
-lorem ipsum
-
 namespace caffe2 {
 namespace onnx {
 
