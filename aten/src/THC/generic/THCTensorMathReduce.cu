@@ -111,6 +111,26 @@ void THCTensor_(std)(THCState *state, THCTensor *self_, THCTensor *src, int dime
   }
 }
 
+void THCTensor_(var)(THCState *state, THCTensor *self, THCTensor *src, int dimension, int biased, int keepdim)
+{
+  THCAssertSameGPU(THCTensor_(checkGPU)(state, 2, self, src));
+  //const accreal size = scalar_cast<accreal>(THCTensor_(size)(state, src, dimension));
+  if (!THC_reduceDim<scalar_t>(state, self, src,
+                           ModifyWelford<WelfordData<accreal, scalar_t>>{},
+                           //thrust::identity<WelfordData<accreal, scalar_t>>{},
+                           ReduceWelford<accreal, scalar_t>{},
+                           VarianceWelford<accreal, scalar_t>{biased},
+                           WelfordData<accreal, scalar_t>{},
+                           //WelfordData<accreal, scalar_t>{scalar_t(0.0)},
+                           dimension,
+                           keepdim)) {
+    THArgCheck(false, 2, CUTORCH_DIM_WARNING);
+  }
+
+  THCudaCheck(cudaGetLastError());
+}
+
+/*
 void THCTensor_(var)(THCState *state, THCTensor *self_, THCTensor *src, int dimension, int biased, int keepdim)
 {
   THCAssertSameGPU(THCTensor_(checkGPU)(state, 2, self_, src));
@@ -137,6 +157,7 @@ void THCTensor_(var)(THCState *state, THCTensor *self_, THCTensor *src, int dime
     THCTensor_(squeeze1d)(state, self_, self_, dimension);
   }
 }
+*/
 
 accreal THCTensor_(stdall)(THCState *state, THCTensor *self, int biased)
 {

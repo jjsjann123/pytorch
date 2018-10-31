@@ -20,6 +20,85 @@
 Reductions that (only) operate on accumulate types.
 */
 
+template <typename T, typename U>
+struct WelfordData {
+  T mean_;
+  T m_2_n_;
+  int count_; // do we need int64_t?
+
+  __host__ __device__ WelfordData() {
+    count_ = 0;
+  }
+
+  __host__ __device__ WelfordData(const U data_) {
+    mean_ = static_cast<T>(data_);
+    m_2_n_ = static_cast<T>(0);
+    count_ = 1;
+  }
+
+  // copy constructor
+  __host__ __device__ WelfordData(const WelfordData &t) :
+    mean_(t.mean_),
+    m_2_n_(t.m_2_n_),
+    count_(t.count_)
+  {
+  }
+
+  // volatile copy constructor
+  __host__ __device__ WelfordData(const volatile WelfordData &t) :
+    mean_(t.mean_),
+    m_2_n_(t.m_2_n_),
+    count_(t.count_)
+  {
+  }
+
+  __host__ __device__ volatile WelfordData& operator = (const volatile WelfordData &t) volatile {
+    mean_ = t.mean_;
+    m_2_n_ = t.m_2_n_;
+    count_ = t.count_;
+    return *this;
+  }
+
+  __host__ __device__ WelfordData& operator = (const WelfordData &t) {
+    mean_ = t.mean_;
+    m_2_n_ = t.m_2_n_;
+    count_ = t.count_;
+    return *this;
+  }
+
+};
+
+
+template <typename T>
+struct ModifyWelford {
+  inline __device__ T operator()(const T &a) const {
+    return a;
+  }
+};
+
+template <typename T, typename U>
+struct ReduceWelford {
+  inline __device__ WelfordData<T, U> operator()(const WelfordData<T, U> &a, const WelfordData<T, U> &b) const {
+    WelfordData<T, U> c(0);
+    c.count_ = THCNumerics<int>::add(a.count_, b.count_);
+    T factor = THCNumerics<T>::div(1.0, max(1, c.count_));
+    c.mean_ = THCNumerics<T>::mul(THCNumerics<T>::add(THCNumerics<T>::mul(a.mean_, a.count_), THCNumerics<T>::mul(b.mean_, b.count_)), factor);
+    c.m_2_n_ = THCNumerics<T>::add(a.m_2_n_, THCNumerics<T>::add(b.m_2_n_, THCNumerics<T>::mul(factor, THCNumerics<T>::mul(a.count_, THCNumerics<T>::mul(b.count_, THCNumerics<T>::pow(THCNumerics<T>::sub(a.mean_, b.mean_), 2) )))));
+    return c;
+  }
+};
+
+template <typename T, typename U>
+struct VarianceWelford {
+  VarianceWelford(const int _biased): biased{_biased} {}
+
+  inline __device__ T operator()(const WelfordData<T, U> &a) const {
+    return THCNumerics<T>::div(a.m_2_n_, biased!=0 ? a.count_ : a.count_-1);
+  }
+
+  const int biased;
+};
+
 template <typename T>
 struct ReduceAdd {
   inline __device__ T operator()(const T a, const T b) const {
