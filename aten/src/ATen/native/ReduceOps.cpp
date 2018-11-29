@@ -95,7 +95,7 @@ static std::unique_ptr<TensorIterator> make_reduction(
   auto mask = make_dim_mask(dim, ndim);
   allocate_reduction_result(result, self, mask, keepdim, dtype);
   auto viewed_result = review_reduce_result(result, ndim, mask, keepdim);
-  if (self.type().scalarType() != dtype) {
+  if (!self.is_cuda() && self.type().scalarType() != dtype) {
     return TensorIterator::reduce_op(viewed_result, self.to(dtype));
   }
   return TensorIterator::reduce_op(viewed_result, self);

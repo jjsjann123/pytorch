@@ -11,9 +11,9 @@
 
 namespace at { namespace native {
 
-template <typename scalar_t, typename acc_t=scalar_t>
+template <typename scalar_t, typename acc_t=scalar_t, typename out_t=scalar_t>
 void sum_kernel_impl(TensorIterator& iter) {
-  gpu_reduce_kernel<scalar_t>(iter, []GPU_LAMBDA(acc_t a, acc_t b) -> acc_t {
+  gpu_reduce_kernel<scalar_t, out_t>(iter, []GPU_LAMBDA(acc_t a, acc_t b) -> acc_t {
     return a + b;
   });
 }
@@ -25,7 +25,7 @@ void sum_kernel_impl<int16_t, int16_t>(TensorIterator& iter) {
   // compiler segfaults:
   // https://bugs.llvm.org/show_bug.cgi?id=39602
   // To work around it, use int32 as the accumulate type.
-  gpu_reduce_kernel<int16_t>(iter, []GPU_LAMBDA(int32_t a, int32_t b) -> int32_t {
+  gpu_reduce_kernel<int16_t, int16_t>(iter, []GPU_LAMBDA(int32_t a, int32_t b) -> int32_t {
     return a + b;
   });
 }
@@ -33,18 +33,30 @@ void sum_kernel_impl<int16_t, int16_t>(TensorIterator& iter) {
 
 template <typename scalar_t, typename acc_t=scalar_t>
 void prod_kernel_impl(TensorIterator& iter) {
-  gpu_reduce_kernel<scalar_t>(iter, []GPU_LAMBDA(acc_t a, acc_t b) -> acc_t {
+  gpu_reduce_kernel<scalar_t, scalar_t>(iter, []GPU_LAMBDA(acc_t a, acc_t b) -> acc_t {
     return a * b;
   }, 1);
 }
 
 static void sum_kernel_cuda(TensorIterator& iter) {
-  if (iter.type().scalarType() == kHalf) {
-    return sum_kernel_impl<at::Half, float>(iter);
+  if (iter.type(0).scalarType() == iter.type(1).scalarType()) {
+    if(iter.type().scalarType() == kHalf) {
+      return sum_kernel_impl<at::Half, float>(iter);
+    }
+    AT_DISPATCH_ALL_TYPES(iter.type(), "sum", [&]() {
+      sum_kernel_impl<scalar_t>(iter);
+    });
+  } else {
+    if (iter.type().scalarType() == kFloat) {
+      AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.type(1), "sum", [&]() {
+        sum_kernel_impl<scalar_t, float, float>(iter);
+      });
+    } else if (iter.type().scalarType() == kDouble) {
+      AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.type(1), "sum", [&]() {
+        sum_kernel_impl<scalar_t, double, double>(iter);
+      });
+    }
   }
-  AT_DISPATCH_ALL_TYPES(iter.type(), "sum", [&]() {
-    sum_kernel_impl<scalar_t>(iter);
-  });
 }
 
 static void prod_kernel_cuda(TensorIterator& iter) {
