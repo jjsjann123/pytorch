@@ -70,7 +70,7 @@ namespace torch {
 
 enum class ParameterType {
   TENSOR, SCALAR, INT64, DOUBLE, TENSOR_LIST, INT_LIST, GENERATOR,
-  BOOL, STORAGE, PYOBJECT, SCALARTYPE, LAYOUT, DEVICE, STRING
+  BOOL, STORAGE, PYOBJECT, SCALARTYPE, LAYOUT, DEVICE, STRING, TYPEMETA
 };
 
 struct FunctionParameter;
@@ -123,6 +123,7 @@ struct PythonArgs {
   inline std::vector<int64_t> intlistWithDefault(int i, std::vector<int64_t> default_intlist);
   inline at::Generator* generator(int i);
   inline at::Storage storage(int i);
+  inline caffe2::TypeMeta toTypeMeta(int i);
   inline at::ScalarType scalartype(int i);
   inline at::ScalarType scalartypeWithDefault(int i, at::ScalarType default_scalartype);
   inline c10::optional<at::ScalarType> scalartypeOptional(int i);
@@ -334,6 +335,13 @@ inline at::ScalarType PythonArgs::scalartype(int i) {
             torch::tensors::get_default_tensor_type().scalarType() : scalartype;
   }
   return reinterpret_cast<THPDtype*>(args[i])->scalar_type;
+}
+
+inline caffe2::TypeMeta PythonArgs::toTypeMeta(int i) {
+  if (!args[i]) {
+    return c10::get_default_dtype();
+  }
+  return c10::scalarTypeToTypeMeta(reinterpret_cast<THPDtype*>(args[i])->scalar_type);
 }
 
 inline c10::optional<at::ScalarType> PythonArgs::scalartypeOptional(int i) {
