@@ -673,13 +673,13 @@ inline Tensor Tensor::view_as(const Tensor & other) const {
 inline Tensor Tensor::where(const Tensor & condition, const Tensor & other) const {
     return type().where(condition, *this, other);
 }
-inline Tensor Tensor::norm(c10::optional<Scalar> p, ScalarType dtype) const {
+inline Tensor Tensor::norm(c10::optional<Scalar> p, caffe2::TypeMeta dtype) const {
     return type().norm(*this, p, dtype);
 }
 inline Tensor Tensor::norm(Scalar p) const {
     return type().norm(*this, p);
 }
-inline Tensor Tensor::norm(c10::optional<Scalar> p, IntList dim, bool keepdim, ScalarType dtype) const {
+inline Tensor Tensor::norm(c10::optional<Scalar> p, IntList dim, bool keepdim, caffe2::TypeMeta dtype) const {
     return type().norm(*this, p, dim, keepdim, dtype);
 }
 inline Tensor Tensor::norm(c10::optional<Scalar> p, IntList dim, bool keepdim) const {

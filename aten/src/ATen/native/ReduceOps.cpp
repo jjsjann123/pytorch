@@ -199,6 +199,14 @@ static ScalarType get_dtype(Tensor& result, const Tensor& self, optional<ScalarT
   return src_type;
 }
 
+//static ScalarType get_dtype(Tensor& result, const Tensor& self, optional<caffe2::TypeMeta> dtype,
+//                            bool promote_integers=false) {
+//  if (dtype.has_value()) {
+//  } else {
+//    return get_dtype(result, self, c10::nullopt, promote_integers);
+//  }
+//}
+
 static Tensor& sum_out(Tensor& result, const Tensor& self, IntList dim,
                        bool keepdim, optional<ScalarType> opt_dtype) {
   ScalarType dtype = get_dtype(result, self, opt_dtype, true);
@@ -387,19 +395,18 @@ Tensor logsumexp(const Tensor &self, int64_t dim_, bool keepdim) {
 }
 
 static Tensor& norm_out(Tensor &result, const Tensor &self, optional<Scalar> opt_p,
-                               IntList dim, bool keepdim, optional<ScalarType> opt_dtype) {
+                               IntList dim, bool keepdim, optional<caffe2::TypeMeta> opt_dtype) {
   auto p = opt_p.value_or(2.0);
   AT_CHECK(self.type().backend() == Backend::CPU || self.type().backend() == Backend::CUDA,
            "norm only supports CPU AND CUDA backend, got: ", toString(self.type().backend()));
 
-  ScalarType scalarType = opt_dtype.has_value() ? opt_dtype.value() : self.type().scalarType();
+  ScalarType dtype = get_dtype(result, self, opt_dtype.has_value() ? optional<ScalarType>(typeMetaToScalarType(opt_dtype.value())) : c10::nullopt, true);
   AT_CHECK(
-      at::isFloatingType(scalarType),
+      at::isFloatingType(dtype),
       "Can only calculate the mean of floating types. Got ",
-      toString(scalarType),
+      toString(dtype),
       " instead.");
 
-  ScalarType dtype = get_dtype(result, self, opt_dtype, true);
   auto iter = make_reduction("norm", result, self, dim, keepdim, dtype);
   if (iter->numel() == 0) {
     result.zero_();
@@ -415,15 +422,15 @@ static inline Tensor _norm(const Tensor &self, Scalar p) {
   } else {
     AT_CHECK(self.type().backend() == Backend::CPU || self.type().backend() == Backend::CUDA,
              "norm only supports CPU AND CUDA backend, got: ", toString(self.type().backend()));
-    AT_CHECK(at::isFloatingType(self.type().scalarType()), "norm only supports floating-point dtypes");
+    AT_CHECK(at::isFloatingType(self.scalar_type()), "norm only supports floating-point dtypes");
 
     Tensor result;
     return at::native::norm_out(result, self, p, {}, false, c10::nullopt);
   }
 }
 
-Tensor &norm_out(Tensor& result, const Tensor& self, optional<Scalar> p, IntList dim, bool keepdim, ScalarType dtype) {
-  return at::native::norm_out(result, self, p, dim, keepdim, optional<ScalarType>(dtype));
+Tensor &norm_out(Tensor& result, const Tensor& self, optional<Scalar> p, IntList dim, bool keepdim, caffe2::TypeMeta dtype) {
+  return at::native::norm_out(result, self, p, dim, keepdim, optional<caffe2::TypeMeta>(dtype));
 }
 
 Tensor &norm_out(Tensor& result, const Tensor& self, optional<Scalar> p, IntList dim, bool keepdim) {
@@ -431,17 +438,17 @@ Tensor &norm_out(Tensor& result, const Tensor& self, optional<Scalar> p, IntList
 }
 
 static Tensor norm(const Tensor& self, optional<Scalar> p, IntList dim, bool keepdim,
-            optional<ScalarType> opt_dtype) {
+            optional<caffe2::TypeMeta> opt_dtype) {
   Tensor result;
   return at::native::norm_out(result, self, p, dim, keepdim, opt_dtype);
 }
 
-Tensor norm(const Tensor& self, optional<Scalar> p, IntList dim, bool keepdim, ScalarType dtype) {
-  return at::native::norm(self, p, dim, keepdim, optional<ScalarType>(dtype));
+Tensor norm(const Tensor& self, optional<Scalar> p, IntList dim, bool keepdim, caffe2::TypeMeta dtype) {
+  return at::native::norm(self, p, dim, keepdim, optional<caffe2::TypeMeta>(dtype));
 }
 
-Tensor norm(const Tensor& self, optional<Scalar> p, ScalarType dtype) {
-  return at::native::norm(self, p, {}, false, optional<ScalarType>(dtype));
+Tensor norm(const Tensor& self, optional<Scalar> p, caffe2::TypeMeta dtype) {
+  return at::native::norm(self, p, {}, false, optional<caffe2::TypeMeta>(dtype));
 }
 
 Tensor norm(const Tensor& self, optional<Scalar> p, IntList dim, bool keepdim) {

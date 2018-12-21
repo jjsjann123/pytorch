@@ -412,6 +412,11 @@ struct CAFFE2_API IValue final {
     return static_cast<at::ScalarType>(toInt());
   }
 
+  // TypeMeta
+  caffe2::TypeMeta toTypeMeta() const {
+    return c10::scalarTypeToTypeMeta(static_cast<at::ScalarType>(toInt()));
+  }
+
   // Layout
   at::Layout toLayout() const {
     return static_cast<at::Layout>(toInt());
@@ -690,6 +695,7 @@ DEFINE_TO(c10::intrusive_ptr<ivalue::Future>, toFuture)
 DEFINE_TO(IValue, toIValue)
 DEFINE_TO(c10::Device, toDevice)
 DEFINE_TO(at::ScalarType, toScalarType)
+DEFINE_TO(caffe2::TypeMeta, toTypeMeta)
 DEFINE_TO(at::Layout, toLayout)
 
 // note: when adding a DEFINE_TO case here you should also add a
