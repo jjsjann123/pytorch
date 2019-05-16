@@ -71,13 +71,6 @@ __global__ void upsample_nearest2d_backward_out_frame(
   // TODO: pad memory to avoid bank conflicts;
   extern __shared__ char smem[];
   
-  int nc_index = threadIdx.z + blockIdx.z * blockDim.z;
-  int w2 = threadIdx.x + blockIdx.x * blockDim.x;
-  int h1 = threadIdx.y + blockIdx.y * blockDim.y;
-  int t_id = 
-      threadIdx.z * blockDim.y * blockDim.x + threadIdx.y * blockDim.x
-      + threadIdx.x;
-
   const int nc = idata.size(0);
   const int height1 = idata.size(1);
   const int width1 = idata.size(2);
@@ -91,6 +84,16 @@ __global__ void upsample_nearest2d_backward_out_frame(
 
   const float height_scale = (float)height1 / (float)height2;
   const float width_scale = (float)width1 / (float)width2;
+
+  int nc_index = threadIdx.z + blockIdx.z * blockDim.z;
+  // offset computed.
+  int block_offset_w1 = blockIdx.x * width_per_block;
+  int w2 = threadIdx.x + 
+      nearest_neighbor_compute_destination_index(width_scale, block_offset_w1, width2);
+  int h1 = threadIdx.y + blockIdx.y * blockDim.y;
+  int t_id = 
+      threadIdx.z * blockDim.y * blockDim.x + threadIdx.y * blockDim.x
+      + threadIdx.x;
 
   accscalar_t acc = 0.0;
 
@@ -126,8 +129,8 @@ __global__ void upsample_nearest2d_backward_out_frame(
     nc_index = layout_z + blockIdx.z * blockDim.z;
     h1 = layout_y + blockIdx.y * blockDim.y;
     const int acc_width_length =
-        nearest_neighbor_compute_destination_index(width_scale, w1+1, width1);
-        - nearest_neighbor_compute_destination_index(width_scale, w1, width1);
+        nearest_neighbor_compute_destination_index(width_scale, w1+1, width2);
+        - nearest_neighbor_compute_destination_index(width_scale, w1, width2);
     int offset = layout_x * (blockDim.y * blockDim.z + 1) + layout_y * blockDim.z
                  + layout_z;
     int stride = blockDim.y * blockDim.z;
