@@ -64,49 +64,80 @@ template <typename scalar_t, typename accscalar_t>
 C10_LAUNCH_BOUNDS_1(1024)
 #endif
 __global__ void upsample_nearest2d_backward_out_frame(
-    const int n,
-    PackedTensorAccessor<scalar_t, 4> idata,
-    const PackedTensorAccessor<scalar_t, 4> odata) {
-  int index = threadIdx.x + blockIdx.x * blockDim.x;
+    const int width_per_block,
+    PackedTensorAccessor<scalar_t, 3> idata,
+    const PackedTensorAccessor<scalar_t, 3> odata) {
+  // shared memory used for reduction;
+  // TODO: pad memory to avoid bank conflicts;
+  extern __shared__ char smem[];
+  
+  int nc_index = threadIdx.z + blockIdx.z * blockDim.z;
+  int w2 = threadIdx.x + blockIdx.x * blockDim.x;
+  int h1 = threadIdx.y + blockIdx.y * blockDim.y;
+  int t_id = 
+      threadIdx.z * blockDim.y * blockDim.x + threadIdx.y * blockDim.x
+      + threadIdx.x;
 
-  const int batchsize = idata.size(0);
-  const int channels = idata.size(1);
-  const int height1 = idata.size(2);
-  const int width1 = idata.size(3);
-  const int height2 = odata.size(2);
-  const int width2 = odata.size(3);
+  const int nc = idata.size(0);
+  const int height1 = idata.size(1);
+  const int width1 = idata.size(2);
+  const int height2 = odata.size(1);
+  const int width2 = odata.size(2);
+
+  //TODO: think twice! how about sync calls later?
+  // if ( nc_index >= nc || w2 >= width2 || h1 >= height2 ) {
+  //   return;
+  // }
 
   const float height_scale = (float)height1 / (float)height2;
   const float width_scale = (float)width1 / (float)width2;
 
-  if (index < n) {
-    const int w2 = index % width2; // 0:width2-1
-    const int h2 = index / width2; // 0:height2-1
-    // special case: just copy
-    if (height1 == height2 && width1 == width2) {
-      const int h1 = h2;
-      const int w1 = w2;
+  accscalar_t acc = 0.0;
 
-      for (int n = 0; n < batchsize; n++) {
-        for (int c = 0; c < channels; ++c) {
-          const scalar_t val = odata[n][c][h2][w2];
-          idata[n][c][h1][w1] = val;
-        }
-      }
-      return;
-    }
-    //
-    const int h1 =
-        nearest_neighbor_compute_source_index(height_scale, h2, height1);
-    const int w1 =
-        nearest_neighbor_compute_source_index(width_scale, w2, width1);
+  // accumulation across column
+  const int h2_offset =
+      nearest_neighbor_compute_destination_index(height_scale, h1, height2);
+  const int h2_boundary =
+      nearest_neighbor_compute_destination_index(height_scale, h1+1, height2);
+  for (int h2 = h2_offset; h2 < h2_boundary && w2 < width2; h2++) {
+    acc += odata[nc_index][h2][w2];
+  }
 
-    for (int n = 0; n < batchsize; n++) {
-      for (int c = 0; c < channels; ++c) {
-        const scalar_t d2val = odata[n][c][h2][w2];
-        atomicAdd(&idata[n][c][h1][w1], d2val);
-      }
+  // write to shared_mem
+  accscalar_t* buffer = (accscalar_t*)smem;
+  int index =
+      threadIdx.x * (blockDim.y * blockDim.z + 1) + threadIdx.y * blockDim.z
+      + threadIdx.z;
+  buffer[index] = acc;
+
+  __syncthreads();
+
+  // accumulation across row and write to output
+  if (t_id <= blockDim.z * blockDim.y * width_per_block) {
+    // adjust block layout to accommodate shrinked block x dimension.
+    const int layout_x = t_id % width_per_block;
+    int tmp_id = t_id / width_per_block;
+    const int layout_y = tmp_id % blockDim.y;
+    const int layout_z = tmp_id / blockDim.y;
+
+    acc = 0.0;
+    // accumulate across row;
+    int w1 = layout_x + blockIdx.x * width_per_block;
+    nc_index = layout_z + blockIdx.z * blockDim.z;
+    h1 = layout_y + blockIdx.y * blockDim.y;
+    const int acc_width_length =
+        nearest_neighbor_compute_destination_index(width_scale, w1+1, width1);
+        - nearest_neighbor_compute_destination_index(width_scale, w1, width1);
+    int offset = layout_x * (blockDim.y * blockDim.z + 1) + layout_y * blockDim.z
+                 + layout_z;
+    int stride = blockDim.y * blockDim.z;
+    for (int i = 0; i < acc_width_length && h1 < height1 && nc_index < nc; i++) {
+      acc += buffer[offset];
+      offset += stride;
     }
+
+    // write output
+    idata[nc_index][h1][w1] = acc;
   }
 }
 
@@ -159,13 +190,12 @@ static void upsample_nearest2d_out_cuda_template(
   int block_x = std::min<int>(lastPow2(output_width), max_threads);
   int block_y = std::min<int>(lastPow2(output_height), max_threads/block_x);
   int block_z = std::min<int>(nc, max_threads/block_x/block_y);
+  const dim3 block(block_x, block_y, block_z);
 
   int grid_x = cuda::ATenCeilDiv(output_width, block_x);
   int grid_y = cuda::ATenCeilDiv(output_height, block_y);
   // maybe we should add a loop here;
   int grid_z = cuda::ATenCeilDiv(nc, block_z*4);
-
-  const dim3 block(block_x, block_y, block_z);
   const dim3 grid(grid_x, grid_y, grid_z);
 
   cudaStream_t stream = at::cuda::getCurrentCUDAStream();
@@ -227,31 +257,50 @@ static void upsample_nearest2d_backward_out_cuda_template(
       output_height,
       output_width);
 
+  int nc = nbatch * channels;
+
   Tensor grad_output = grad_output_.contiguous();
-  grad_input.resize_({nbatch, channels, input_height, input_width});
+  grad_input.resize_({nc, input_height, input_width});
+  grad_output.resize_({nc, output_height, output_width});
 
-  grad_input.zero_();
-
-  const int num_kernels = output_height * output_width;
-  const int num_threads =
+  const int max_threads =
       at::cuda::getCurrentDeviceProperties()->maxThreadsPerBlock;
-  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
+  int block_x = std::min<int>(lastPow2(output_width), max_threads/4);
+  // this is intended to be a floorf(block.x / (float)width_scale);
+  int width_per_block = block_x * input_width / output_width;
+  // we let each thread loop over reduced-column;
+  int block_y = std::min<int>(lastPow2(input_height), max_threads/block_x);
+  int block_z = std::min<int>(nc, max_threads/block_x/block_y);
+  const dim3 block(block_x, block_y, block_z);
+
+  int grid_x = cuda::ATenCeilDiv(output_width, block_x);
+  int grid_y = cuda::ATenCeilDiv(input_height, block_y);
+  int grid_z = cuda::ATenCeilDiv(nc, block_z);
+  const dim3 grid(grid_x, grid_y, grid_z);
+
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
   AT_DISPATCH_FLOATING_TYPES_AND_HALF(
       grad_output.scalar_type(), "upsample_nearest2d_backward_out_frame", [&] {
         using accscalar_t = at::acc_type<scalar_t, true>;
 
-        auto idata = grad_input.packed_accessor<scalar_t, 4>();
-        auto odata = grad_output.packed_accessor<scalar_t, 4>();
+        auto idata = grad_input.packed_accessor<scalar_t, 3>();
+        auto odata = grad_output.packed_accessor<scalar_t, 3>();
+
+        // shared memory used for row reduction;
+        // padded to avoid bank conflict;
+        size_t mem_size = block_x * (1 + block_y * block_z) * sizeof(scalar_t);
 
         upsample_nearest2d_backward_out_frame<scalar_t, accscalar_t>
-            <<<cuda::ATenCeilDiv(num_kernels, num_threads),
-               num_threads,
-               0,
-               stream>>>(num_kernels, idata, odata);
+            <<<grid,
+               block,
+               mem_size,
+               stream>>>(width_per_block, idata, odata);
       });
 
-      AT_CUDA_CHECK(cudaGetLastError());
+  grad_input.resize_({nbatch, channels, input_height, input_width});
+  grad_output.resize_({nbatch, channels, output_height, output_width});
+  AT_CUDA_CHECK(cudaGetLastError());
 }
 
 } // namespace

@@ -163,6 +163,15 @@ __device__ __forceinline__ static int nearest_neighbor_compute_source_index(
   return src_index;
 }
 
+__device__ __forceinline__ static int nearest_neighbor_compute_destination_index(
+    const float scale,
+    int src_index,
+    int output_size) {
+  const int dst_index = min<int>(
+      static_cast<int>(ceilf(src_index / scale)), output_size - 1);
+  return dst_index;
+}
+
 /* just affect UpSampleBicubic2d.cu */
 /* TODO: change width and height order in the arguments */
 /* TODO: maybe change x and y order in the arguments */
