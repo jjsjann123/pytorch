@@ -546,6 +546,8 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
 
   ExecutionPlan compileSpec(const ArgumentSpec& spec) {
     auto opt_graph = graph->copy();
+    printf("==== original copied graph ====\n");
+    opt_graph->dump();
     arg_spec_creator_.specializeTypes(*opt_graph, spec);
 
     // Phase 1. Specialize to input definedness (this is very important for
@@ -566,6 +568,8 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
     //          that we can still execute using autograd).
     runOptimization(opt_graph);
 
+    printf("==== after differentiable optimization passes ====\n");
+    opt_graph->dump();
     // Phase 4. If this graph will be differentiated, we need to slice out the
     //          symbolically differentiable subgraphs for further optimizations.
     // Phase 5. Apply non-differentiable optimizations to the graphs we've found
@@ -577,7 +581,11 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
       for (Node* dnode : diff_nodes) {
         auto diff_graph = std::move(dnode->g(attr::Subgraph));
         Gradient gradient = differentiate(diff_graph);
-        // Run post differentiation optimizations, Autodiff will replace some
+        printf("==== generated gradient graph ====\n");
+        gradient.df->dump();
+        printf("==== fw graph ====\n");
+        gradient.f->dump();
+        // Run post differentiation optimizations, Autodiff will replace some 
         // parts of graph with new graph, these new graphs usually consists of
         // control flows and miss shape information on nodes, so we run shape
         // prop and differentiable optimizations to ensure the graph is
@@ -596,6 +604,8 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
     }
     // Make sure there are no leftovers from any passes.
     EliminateDeadCode(opt_graph);
+    printf("==== final graph ====\n");
+    opt_graph->dump();
     return ExecutionPlan(opt_graph);
   }
 
@@ -618,6 +628,7 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
 
   void runNondiffOptimization(std::shared_ptr<Graph>& graph) {
     // run custom passes that different backends can register
+    printf("total number of custom passes %d\n", getCustomPasses().size());
     for (const auto& pass : getCustomPasses()) {
       pass(graph);
     }
@@ -627,6 +638,8 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
     // Rewrite subgraphs with many MMs into expressions that batch them.
     BatchMM(graph);
 
+    printf("before fused graph\n");
+    graph->dump();
     FuseGraph(graph);
   }
 

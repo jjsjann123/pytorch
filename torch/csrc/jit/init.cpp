@@ -35,6 +35,7 @@
 #include <torch/csrc/jit/passes/shape_analysis.h>
 #include <torch/csrc/jit/passes/specialize_autogradzero.h>
 #include <torch/csrc/jit/passes/subgraph_rewrite.h>
+#include <torch/csrc/jit/passes/mixed_precision.h>
 #include <torch/csrc/jit/passes/utils/check_alias_annotation.h>
 #include <torch/csrc/jit/print_handler.h>
 #include <torch/csrc/jit/pybind_utils.h>
@@ -236,6 +237,17 @@ void initJITBindings(PyObject* module) {
           "_jit_pass_fold_quant_inputs",
           [](std::shared_ptr<Graph>& g) {
             return FoldQuantNodesIntoInputsOutputs(g);
+          })
+      .def(
+          "_jit_pass_insert_casting_node",
+          [](std::shared_ptr<Graph>& g) { return insertCastingNode(g); })
+      .def(
+          "_jit_pass_remove_consecutive_casting_node",
+          [](std::shared_ptr<Graph>& g) { return removeConsecutiveCastingNode(g); })
+      .def(
+          "_jit_pass_insert_casting_with_scaling_node",
+          [](std::shared_ptr<Graph>& g) {
+            return insertCastingWithScalingNode(g);
           })
       .def(
           "_jit_pass_remove_inplace_ops",
