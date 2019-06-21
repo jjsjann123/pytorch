@@ -32,10 +32,12 @@
 #include <torch/csrc/jit/passes/requires_grad_analysis.h>
 #include <torch/csrc/jit/passes/shape_analysis.h>
 #include <torch/csrc/jit/passes/specialize_autogradzero.h>
+#include <torch/csrc/jit/passes/mixed_precision.h>
 #include <torch/csrc/jit/profiling_graph_executor_impl.h>
 #include <torch/csrc/jit/profiling_record.h>
 #include <torch/csrc/jit/resource_guard.h>
 #include <torch/csrc/jit/tracer.h>
+#include <torch/csrc/jit/update_graph_auto_casting.h>
 
 #include <torch/csrc/autograd/edge.h>
 #include <torch/csrc/autograd/function.h>
@@ -573,6 +575,11 @@ struct GraphExecutorImpl : public GraphExecutorImplBase {
     // Phase 3. Run differentiable optimizations (i.e. simple graph rewrites
     //          that we can still execute using autograd).
     runOptimization(opt_graph);
+
+    // Phase 3.5 optional auto-casting pass used by automatic mixed precision
+    if (getGraphAutoCasting()) {
+      AmpAutoCasting(opt_graph);
+    }
 
     // Phase 4. If this graph will be differentiated, we need to slice out the
     //          symbolically differentiable subgraphs for further optimizations.

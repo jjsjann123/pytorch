@@ -254,6 +254,15 @@ RegisterOperators reg(
          },
          aliasAnalysisSpecialCase()),
      Operator(
+         prim::AmpGroup,
+         [](const Node* node) -> Operation {
+           return [](Stack& stack) {
+             AT_ERROR("Should be inlined before execution");
+             return 0;
+           };
+         },
+         aliasAnalysisSpecialCase()),
+     Operator(
          "prim::Guard(Tensor(a) t) -> Tensor(a)",
          [](Stack& stack) {
            AT_ERROR("Should be replaced by prim::BailOut");

@@ -88,6 +88,19 @@ def scope(scope_name):
             tracing_state.pop_scope()
 
 @contextlib.contextmanager
+def auto_casting(use_amp):
+    """
+    A context manager that controls whether the JIT's executor will run
+    optimizations before executing a function.
+    """
+    stored_flag = torch._C._get_graph_auto_casting()
+    torch._C._set_graph_auto_casting(use_amp)
+    try:
+        yield
+    finally:
+        torch._C._set_graph_auto_casting(stored_flag)
+
+@contextlib.contextmanager
 def optimized_execution(should_optimize):
     """
     A context manager that controls whether the JIT's executor will run

@@ -20,6 +20,7 @@
 #include <torch/csrc/jit/script/logging.h>
 #include <torch/csrc/jit/script/parser.h>
 #include <torch/csrc/jit/tracer.h>
+#include <torch/csrc/jit/update_graph_auto_casting.h>
 
 #include <torch/csrc/api/include/torch/ordered_dict.h>
 
@@ -1038,6 +1039,12 @@ void initJitScriptBindings(PyObject* module) {
               ++defaults_it;
             }
           });
+
+  m.def("_set_graph_auto_casting", [](bool casting_flag) {
+    setGraphAutoCasting(casting_flag);
+  });
+
+  m.def("_get_graph_auto_casting", &torch::jit::getGraphAutoCasting);
 
   m.def(
       "_resolve_type",
