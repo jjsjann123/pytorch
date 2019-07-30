@@ -6,6 +6,7 @@
 #include <ATen/native/TensorIterator.h>
 #include <ATen/native/quantized/Copy.h>
 #include <ATen/quantized/Quantizer.h>
+#include <ATen/MemoryOverlap.h>
 
 namespace {
 
@@ -120,6 +121,7 @@ Tensor & copy_(Tensor & self, const Tensor & src, bool non_blocking) {
   }
 
   auto iter = TensorIterator();
+  assert_no_internal_overlap(self, "copy_");
   iter.add_output(self);
   iter.add_input(src);
   iter.dont_resize_outputs();
