@@ -72,7 +72,7 @@ Tensor contiguous(const Tensor & self) {
 }
 
 Tensor contiguous(const Tensor& self, MemoryFormat memory_format) {
-  if (self.is_contiguous(memory_format)) {
+  if (self.is_contiguous(memory_format) && self.suggest_memory_format() == memory_format) {
     return self;
   }
   TORCH_CHECK(
