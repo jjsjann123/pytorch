@@ -25,10 +25,11 @@ public:
   TORCH_API ~GraphPartition();
 
   void refreshAliasDb();
-  Node* scanNode(Node* n);
-  at::optional<Node*> tryMerge(Node* consumer, Value* producer);
+  void partition();
 private:
-  
+  void mergeNodesInBlock(Block*);
+  at::optional<Node*> tryMerge(Node* consumer, Value* producer);
+  Node* scanNode(Node* n);
   Graph& getSubgraph(Node* n);
   Node* mergeNodeIntoPartition(Node* partition, Node* n);
   Node* createSingleNodePartition(Node* n);
