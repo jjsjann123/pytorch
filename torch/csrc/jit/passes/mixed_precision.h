@@ -7,6 +7,7 @@
 #pragma once
 
 #include <torch/csrc/jit/ir.h>
+#include <torch/csrc/jit/passes/alias_analysis.h>
 
 namespace torch {
 namespace jit {
@@ -15,6 +16,28 @@ enum class TraversalDirection {
   FollowInputs,
   FollowOutputs,
   FollowInputsAndOutputs,
+};
+
+class GraphPartition {
+public:
+  TORCH_API explicit GraphPartition(
+      std::shared_ptr<Graph> graph, Symbol kind, std::function<bool(Node*)> fn);
+  TORCH_API ~GraphPartition();
+
+  void refreshAliasDb();
+  Node* scanNode(Node* n);
+  at::optional<Node*> tryMerge(Node* consumer, Value* producer);
+private:
+  
+  Graph& getSubgraph(Node* n);
+  Node* mergeNodeIntoPartition(Node* partition, Node* n);
+  Node* createSingleNodePartition(Node* n);
+  void mergePartitions(Node* consumer, Node* producer);
+
+  Symbol kind_;
+  std::unique_ptr<AliasDb> aliasDb_;
+  std::shared_ptr<Graph> graph_;
+  std::function<bool(Node*)> fn_;
 };
 
 /**
