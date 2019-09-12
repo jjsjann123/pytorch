@@ -56,13 +56,11 @@ void graphTopoOrderTraversal(Block* block, const func_t& f) {
   }
 }
 
-template<typename enter_t, typename modify_t, typename init_t>
+template<typename enter_t, typename modify_t>
 void graphTopoOrderModify(
     Block* block,
     const enter_t& t,
-    const modify_t& f,
-    const init_t& init) {
-  init();
+    const modify_t& f) {
   bool any_changed = true;
   while (any_changed) {
     any_changed = false;
@@ -77,7 +75,7 @@ void graphTopoOrderModify(
   }
   for (auto node : block->nodes()) {
     for (auto sub_block : node->blocks()) {
-      graphTopoOrderModify(sub_block, t, f, init);
+      graphTopoOrderModify(sub_block, t, f);
     }
   }
 }
@@ -98,6 +96,61 @@ GraphPartition::GraphPartition(
 
 void GraphPartition::refreshAliasDb() {
   aliasDb_ = torch::make_unique<AliasDb>(graph_);
+}
+
+void GraphPartition::partition() {
+  mergeNodesInBlock(graph_->block());
+}
+
+void GraphPartition::mergeNodesInBlock(Block* block) {
+  bool any_changed = true;
+  while (any_changed) {
+    any_changed = false;
+    refreshAliasDb();
+    for (auto it = block->nodes().rbegin(); it != block->nodes().rend();) {
+      bool merge_node = false;
+      if (fn_(*it)) {
+        value_list reverse_topological_inputs;
+        for (auto i : it->inputs()) {
+          if (i->node()->owningBlock() == block) {
+            reverse_topological_inputs.push_back(i);
+          }
+        }
+        // Sort in reverse topological order
+        std::sort(
+            reverse_topological_inputs.begin(),
+            reverse_topological_inputs.end(),
+            [&](Value* a, Value* b) {
+              return a->node()->isAfter(b->node());
+            });
+        for (auto producer : reverse_topological_inputs) {
+          std::cout << "try merging node: " << std::endl;
+          std::cout << "                  " << *it << std::endl;
+          std::cout << "                  " << *producer->node() << std::endl;
+          auto partition = tryMerge(*it, producer);
+          if (partition) {
+            std::cout << "     merged" << std::endl;
+            it = partition.value()->reverseIterator();
+            merge_node = true;
+						break;
+          } else {
+            std::cout << "     not merged" << std::endl;
+          }
+        }
+      }
+ 			if (!merge_node) {
+        it++;
+      } else {
+        any_changed |= merge_node;
+      }
+    }
+  }
+
+  for (Node* node : block->nodes()) {
+    for (Block* sub_block : node->blocks()) {
+      mergeNodesInBlock(sub_block);
+    }
+  }
 }
 
 Graph& GraphPartition::getSubgraph(Node* n) {
@@ -616,7 +669,6 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
   // TODO: we prolly want our own Symbol other than reusing the
   // prim::FusionGroup just to save us from confusion, although this temporary
   // node is not supposed to see the light of the day EVER.
-  /*
   const auto amp_fp16_symbol = Symbol::fromQualString("prim::FusionGroup");
   GraphPartition gp(
       graph,
@@ -624,6 +676,9 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
       [&](Node* n) -> bool {
 				return white_nodes.count(n) != 0;
 			});
+  gp.partition();
+
+  /*
   graphTopoOrderModify(graph->block(),
       [&](const Node* n) -> bool {
         return white_nodes.count(n) != 0;
@@ -651,6 +706,7 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
       },
       [&]() {gp.refreshAliasDb();});
    */
+  /*
   const auto amp_fp16_symbol = Symbol::fromQualString("prim::FusionGroup");
   CustomFuseGraph(
       graph,
@@ -661,6 +717,7 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
           return false;
       },
       amp_fp16_symbol);
+   */
 
   // FuseGraph inserts bunch of shape & Broadcast ops inside, which is not
   // needed since we'll inline the fusion afterwards;
@@ -676,21 +733,28 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
           auto subgraph = n->g(attr::Subgraph);
           auto sync = subgraph->insertConstant(false);
           std::cout << (*subgraph);
-          //vector<Node*> cast(subgraph->inputs().size());
           for (auto input : subgraph->inputs()) {
             auto n = subgraph->create(Symbol::fromQualString("aten::_cast_Half"));
-            n->insertAfter(input->node());
-            input->replaceAllUsesWith(n->outputs()[0]);
-            n->addInput(input);
-            n->addInput(sync);
+            if (input->type()->isSubtypeOf(TensorType::get())) {
+              n->insertAfter(input->node());
+              input->replaceAllUsesWith(n->outputs()[0]);
+              n->addInput(input);
+              n->addInput(sync);
+            } else if (input->type()->isSubtypeOf(ListType::ofTensors())) {
+              throw std::runtime_error("List Tensor not implemented yet\n");
+            }
           }
 
           for (auto output : subgraph->outputs()) {
             auto n = subgraph->create(Symbol::fromQualString("aten::_cast_Float"));
-            n->insertAfter(output->node());
-            output->replaceAllUsesWith(n->outputs()[0]);
-            n->addInput(output);
-            n->addInput(sync);
+            if (output->type()->isSubtypeOf(TensorType::get())) {
+              n->insertAfter(output->node());
+              output->replaceAllUsesWith(n->outputs()[0]);
+              n->addInput(output);
+              n->addInput(sync);
+            } else if (output->type()->isSubtypeOf(ListType::ofTensors())) {
+              throw std::runtime_error("List Tensor not implemented yet\n");
+            }
           }
           sync->node()->moveAfter(subgraph->inputs()[0]->node());
         }
@@ -706,8 +770,7 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
       },
       [&](Node* n) -> graph_node_list::iterator {
         return ++inlineCallTo(n, *(n->g(attr::Subgraph))).back()->node()->reverseIterator();
-      },
-      [](){});
+      });
 
   EliminateCommonSubexpression(graph);
   EliminateDeadCode(graph);
