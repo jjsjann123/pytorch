@@ -21,23 +21,30 @@ namespace {
 #define ASYNC_FLAG true
 
 std::unordered_set<Symbol> WhiteList = {
-  aten::relu,
-  aten::addmm,
+  aten::mul,
+  aten::conv1d,
+  aten::conv2d,
+  aten::conv3d,
+  Symbol::fromQualString("aten::_convolution"),
+  Symbol::fromQualString("aten::conv_transpose1d"),
+  Symbol::fromQualString("aten::conv_transpose2d"),
+  Symbol::fromQualString("aten::conv_transpose3d"),
   aten::matmul,
+  aten::addmm,
+  aten::addmv,
+  aten::addr,
   aten::mm,
-  aten::mul
+  aten::mv
 };
 
 std::unordered_set<Symbol> BlackList = {
-  aten::tanh,
-  aten::batch_norm,
+  Symbol::fromQualString("aten::tanh_"),
+  //aten::tanh,
+  //aten::batch_norm,
   // temporary hack
   prim::TupleConstruct,
   aten::softmax,
   // apparently plain `aten::tanh_` doesn't work. no idea why
-  Symbol::fromQualString("aten::tanh_"),
-  Symbol::fromQualString("aten::relu_"),
-  Symbol::fromQualString("aten::relu"),
   Symbol::fromQualString("aten::pow_"),
   Symbol::fromQualString("aten::pow")
 };
@@ -124,17 +131,23 @@ void GraphPartition::mergeNodesInBlock(Block* block) {
               return a->node()->isAfter(b->node());
             });
         for (auto producer : reverse_topological_inputs) {
-          std::cout << "try merging node: " << std::endl;
-          std::cout << "                  " << *it << std::endl;
-          std::cout << "                  " << *producer->node() << std::endl;
+          if (DEBUG) {
+            std::cout << "try merging node: " << std::endl;
+            std::cout << "                  " << *it << std::endl;
+            std::cout << "                  " << *producer->node() << std::endl;
+          }
           auto partition = tryMerge(*it, producer);
           if (partition) {
-            std::cout << "     merged" << std::endl;
+            if (DEBUG) {
+              std::cout << "     merged" << std::endl;
+            }
             it = partition.value()->reverseIterator();
             merge_node = true;
 						break;
           } else {
-            std::cout << "     not merged" << std::endl;
+            if (DEBUG) {
+              std::cout << "     not merged" << std::endl;
+            }
           }
         }
       }
@@ -675,6 +688,7 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
 			amp_fp16_symbol,
       [&](Node* n) -> bool {
 				return white_nodes.count(n) != 0;
+				//return black_nodes.count(n) == 0;
 			});
   gp.partition();
 
@@ -736,20 +750,27 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
           for (auto input : subgraph->inputs()) {
             auto n = subgraph->create(Symbol::fromQualString("aten::_cast_Half"));
             if (input->type()->isSubtypeOf(TensorType::get())) {
-              n->insertAfter(input->node());
               input->replaceAllUsesWith(n->outputs()[0]);
               n->addInput(input);
               n->addInput(sync);
+              n->insertAfter(input->node());
             } else if (input->type()->isSubtypeOf(ListType::ofTensors())) {
               throw std::runtime_error("List Tensor not implemented yet\n");
             }
           }
 
-          for (auto output : subgraph->outputs()) {
+          // not safe to do so!
+          //for (auto output : subgraph->outputs()) {
+          for (int i = subgraph->outputs().size()-1; i >= 0; i--) {
             auto n = subgraph->create(Symbol::fromQualString("aten::_cast_Float"));
+            auto output = subgraph->outputs()[i];
             if (output->type()->isSubtypeOf(TensorType::get())) {
-              n->insertAfter(output->node());
-              output->replaceAllUsesWith(n->outputs()[0]);
+              // TODO: mistakes I've made in the past. Keep them here and put a
+              // comment.
+              // `n->insertAfter(output->node());`
+              // `output->replaceAllUsesWith(n->outputs()[0]);`
+              n->insertBefore(subgraph->return_node());
+              subgraph->return_node()->replaceInputWith(output, n->outputs()[0]);
               n->addInput(output);
               n->addInput(sync);
             } else if (output->type()->isSubtypeOf(ListType::ofTensors())) {
@@ -769,6 +790,9 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
         return n->kind() == amp_fp16_symbol;
       },
       [&](Node* n) -> graph_node_list::iterator {
+        std::cout << std::endl << "inlining " << std::endl;
+        std::cout << (*n);
+        std::cout << "don inlining " << std::endl;
         return ++inlineCallTo(n, *(n->g(attr::Subgraph))).back()->node()->reverseIterator();
       });
 
