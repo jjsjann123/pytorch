@@ -687,6 +687,20 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
       graph,
 			amp_fp16_symbol,
       [&](Node* n) -> bool {
+        std::cout << "parsing node:" << std::endl;
+        std::cout << (*n);
+        for (auto input : n->inputs()) {
+          if (input->type()->isSubtypeOf(TensorType::get())) {
+            auto i_t = input->type()->cast<TensorType>();
+            auto device = i_t->device();
+            if (device) {
+              std::cout << "  cuda tensor: " << device.value().is_cuda() << std::endl;
+              std::cout << "  cpu  tensor: " << device.value().is_cpu() << std::endl;
+            } else {
+              std::cout << "  device not existed yet: " << std::endl;
+            }
+          }
+        }
 				return white_nodes.count(n) != 0;
 				//return black_nodes.count(n) == 0;
 			});
@@ -792,7 +806,7 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
       [&](Node* n) -> graph_node_list::iterator {
         std::cout << std::endl << "inlining " << std::endl;
         std::cout << (*n);
-        std::cout << "don inlining " << std::endl;
+        std::cout << "done inlining " << std::endl;
         return ++inlineCallTo(n, *(n->g(attr::Subgraph))).back()->node()->reverseIterator();
       });
 
