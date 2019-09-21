@@ -21,7 +21,7 @@ enum class TraversalDirection {
 class GraphPartition {
 public:
   TORCH_API explicit GraphPartition(
-      std::shared_ptr<Graph> graph, Symbol kind, std::function<bool(Node*)> fn);
+      std::shared_ptr<Graph> graph, Symbol kind, std::function<bool(Node*)> fn, bool debug=false);
   TORCH_API ~GraphPartition();
 
   void refreshAliasDb();
@@ -39,6 +39,8 @@ private:
   std::unique_ptr<AliasDb> aliasDb_;
   std::shared_ptr<Graph> graph_;
   std::function<bool(Node*)> fn_;
+
+  bool debug_;
 };
 
 /**

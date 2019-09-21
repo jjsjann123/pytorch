@@ -44,6 +44,7 @@ std::unordered_set<Symbol> BlackList = {
   // temporary hack
   prim::TupleConstruct,
   aten::softmax,
+  Symbol::fromQualString("prim::GetAttr"),
   // apparently plain `aten::tanh_` doesn't work. no idea why
   Symbol::fromQualString("aten::pow_"),
   Symbol::fromQualString("aten::pow")
@@ -94,10 +95,12 @@ GraphPartition::~GraphPartition() = default;
 GraphPartition::GraphPartition(
     std::shared_ptr<Graph> graph,
     Symbol kind,
-    std::function<bool(Node*)> fn)
+    std::function<bool(Node*)> fn,
+    bool debug)
       : graph_(std::move(graph)),
         kind_(kind),
-        fn_(fn) {
+        fn_(fn),
+        debug_(debug){
   aliasDb_ = torch::make_unique<AliasDb>(graph_);
 }
 
@@ -116,7 +119,15 @@ void GraphPartition::mergeNodesInBlock(Block* block) {
     refreshAliasDb();
     for (auto it = block->nodes().rbegin(); it != block->nodes().rend();) {
       bool merge_node = false;
+      if (debug_) {
+        std::cout << "====check if we should try: ";
+        it->dump();
+      }
       if (fn_(*it)) {
+        if (debug_) {
+          std::cout << "====merging node with producer: ";
+          it->dump();
+        }
         value_list reverse_topological_inputs;
         for (auto i : it->inputs()) {
           if (i->node()->owningBlock() == block) {
@@ -131,21 +142,23 @@ void GraphPartition::mergeNodesInBlock(Block* block) {
               return a->node()->isAfter(b->node());
             });
         for (auto producer : reverse_topological_inputs) {
-          if (DEBUG) {
+          if (debug_) {
             std::cout << "try merging node: " << std::endl;
-            std::cout << "                  " << *it << std::endl;
+            //std::cout << "                  " << (*it) << std::endl;
+            std::cout << "                  "; 
+            it->dump();
             std::cout << "                  " << *producer->node() << std::endl;
           }
           auto partition = tryMerge(*it, producer);
           if (partition) {
-            if (DEBUG) {
+            if (debug_) {
               std::cout << "     merged" << std::endl;
             }
             it = partition.value()->reverseIterator();
             merge_node = true;
 						break;
           } else {
-            if (DEBUG) {
+            if (debug_) {
               std::cout << "     not merged" << std::endl;
             }
           }
@@ -304,8 +317,19 @@ at::optional<Node*> GraphPartition::tryMerge(Node* consumer, Value* producer) {
       // an output of the fusion group.
       aliasDb_->moveBeforeTopologicallyValid(producer->node(), consumer);
 
+  if (debug_) {
+      std::cout << "try merging two nodes: " << std::endl << "---" << (*consumer) << "---" << (*producer->node());
+  }
+
   if (!shouldMerge) {
+    if (debug_) {
+      std::cout << "==== failed" << std::endl;
+    }
     return at::nullopt;
+  }
+
+  if (debug_) {
+    std::cout << "==== succeeded" << std::endl;
   }
 
   auto partition = consumer;
@@ -682,70 +706,15 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
   // TODO: we prolly want our own Symbol other than reusing the
   // prim::FusionGroup just to save us from confusion, although this temporary
   // node is not supposed to see the light of the day EVER.
+  // TODO: we need to update that white_nodes list as we remove/destroy nodes!
   const auto amp_fp16_symbol = Symbol::fromQualString("prim::FusionGroup");
   GraphPartition gp(
       graph,
 			amp_fp16_symbol,
       [&](Node* n) -> bool {
-        //std::cout << "parsing node:" << std::endl;
-        //std::cout << (*n);
-        //for (auto input : n->inputs()) {
-        //  if (input->type()->isSubtypeOf(TensorType::get())) {
-        //    auto i_t = input->type()->cast<TensorType>();
-        //    auto device = i_t->device();
-        //    if (device) {
-        //      std::cout << "  cuda tensor: " << device.value().is_cuda() << std::endl;
-        //      std::cout << "  cpu  tensor: " << device.value().is_cpu() << std::endl;
-        //    } else {
-        //      std::cout << "  device not existed yet: " << std::endl;
-        //    }
-        //  }
-        //}
-				return white_nodes.count(n) != 0;
-				//return black_nodes.count(n) == 0;
+				return white_nodes.count(n) != 0 || n->kind() == amp_fp16_symbol;
 			});
   gp.partition();
-
-  /*
-  graphTopoOrderModify(graph->block(),
-      [&](const Node* n) -> bool {
-        return white_nodes.count(n) != 0;
-      },
-      [&](Node* n) -> graph_node_list::iterator {
-        auto block = n->owningBlock();
-        value_list reverse_topological_inputs;
-        for (auto i : n->inputs()) {
-          if (i->node()->owningBlock() == block) {
-            reverse_topological_inputs.push_back(i);
-          }
-        }
-        // Sort in reverse topological order
-        std::sort(
-						reverse_topological_inputs.begin(),
-						reverse_topological_inputs.end(),
-						[&](Value* a, Value* b) {
-          		return a->node()->isAfter(b->node());
-            });
-        for (auto producer : reverse_topological_inputs) {
-          gp.tryMerge(n, producer);
-        }
-        // fail to merge, move iterator to next;
-        return ++n->reverseIterator();
-      },
-      [&]() {gp.refreshAliasDb();});
-   */
-  /*
-  const auto amp_fp16_symbol = Symbol::fromQualString("prim::FusionGroup");
-  CustomFuseGraph(
-      graph,
-      [&](Node* n) -> bool {
-          if (white_nodes.count(n) != 0) {
-              return true;
-          }
-          return false;
-      },
-      amp_fp16_symbol);
-   */
 
   // FuseGraph inserts bunch of shape & Broadcast ops inside, which is not
   // needed since we'll inline the fusion afterwards;
@@ -753,6 +722,18 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
   EliminateDeadCode(graph);
   std::cout << "=========================graph partitioning=========================" << std::endl;
   std::cout << *graph << std::endl;
+
+  // GraphPartition gp_second(
+  //     graph,
+	// 		amp_fp16_symbol,
+  //     [&](Node* n) -> bool {
+	// 			return white_nodes.count(n) != 0;
+	// 		},
+  //     true);
+  // gp_second.partition();
+
+  // std::cout << "=========================try fuse the two more nodes=========================" << std::endl;
+  // std::cout << *graph << std::endl;
 
   graphTopoOrderTraversal<true>(
       graph->block(),
