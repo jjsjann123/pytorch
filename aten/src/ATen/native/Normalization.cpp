@@ -412,7 +412,7 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, int64_t> _batch_norm_impl_index(
 
 std::tuple<Tensor, Tensor, Tensor> _batch_norm_impl_index_backward(
     int64_t impl_index,
-    const Tensor& input, const Tensor& output, const Tensor& grad_output, const Tensor& weight /* optional */, const Tensor& bias /* optional */,
+    const Tensor& input, const Tensor& grad_output, const Tensor& weight /* optional */, const Tensor& bias /* optional */,
     const Tensor& running_mean /* optional */, const Tensor& running_var /* optional */,
     const Tensor& save_mean /* optional */, const Tensor& save_var_transform /* optional */,
     bool train, double epsilon, std::array<bool, 3> output_mask, const Tensor &reservedSpace) {
@@ -421,7 +421,7 @@ std::tuple<Tensor, Tensor, Tensor> _batch_norm_impl_index_backward(
   } else if (impl_index == 1) {
     // TODO: _batch_norm_impl_index_backward is only used in JIT. cudnn NHWC
     // format conversion is done inside cudnn_batch_norm_backward instead
-    return at::cudnn_batch_norm_backward(input, output, grad_output, weight, bias, running_mean, running_var, save_mean, save_var_transform, epsilon, reservedSpace);
+    return at::cudnn_batch_norm_backward(input, grad_output, weight, bias, running_mean, running_var, save_mean, save_var_transform, epsilon, reservedSpace);
   } else if (impl_index == 2) {
     return at::miopen_batch_norm_backward(input, grad_output, weight, running_mean, running_var, save_mean, save_var_transform, epsilon);
   }

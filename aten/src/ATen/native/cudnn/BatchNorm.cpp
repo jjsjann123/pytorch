@@ -194,7 +194,7 @@ std::tuple<Tensor, Tensor, Tensor, Tensor> cudnn_batch_norm(
 // in training mode (evaluation mode batchnorm has a different algorithm),
 // which is why this doesn't accept a 'training' parameter.
 std::tuple<Tensor, Tensor, Tensor> cudnn_batch_norm_backward(
-    const Tensor& input_t, const Tensor& output_t, const Tensor& grad_output_t,
+    const Tensor& input_t, const Tensor& grad_output_t,
     const Tensor& weight_t, const Tensor& bias_t,
     // Unused: but we require them to be passed so that double backwards
     // has access
@@ -206,25 +206,24 @@ std::tuple<Tensor, Tensor, Tensor> cudnn_batch_norm_backward(
   // TODO: Is it worth it to have a contiguous call or maybe we should go with
   // whatever format is given here.
   TensorArg input{ input_t, "input", 1 },
-            output{ output_t, "output", 2 },
-            grad_output{ grad_output_t.contiguous(input_t.suggest_memory_format()), "grad_output", 3 },
-            weight{ weight_t, "weight", 4 },
-            bias{ bias_t, "bias", 5 },
-            save_mean{ save_mean_t, "save_mean", 6 },
-            save_var{ save_var_t, "save_var", 7 },
-            reserve{ reserveSpace, "reserve_space", 8 };
+            grad_output{ grad_output_t.contiguous(input_t.suggest_memory_format()), "grad_output", 2 },
+            weight{ weight_t, "weight", 3 },
+            bias{ bias_t, "bias", 4 },
+            save_mean{ save_mean_t, "save_mean", 5 },
+            save_var{ save_var_t, "save_var", 6 },
+            reserve{ reserveSpace, "reserve_space", 7 };
   CheckedFrom c = "cudnn_batch_norm_backward";
   setCuDNNStreamToCurrent();
 
-  checkAllDefined(c, {input, output, grad_output, weight, save_mean, save_var});
-  checkAllSameGPU(c, {input, output, grad_output, weight, save_mean, save_var});
+  checkAllDefined(c, {input, grad_output, weight, save_mean, save_var});
+  checkAllSameGPU(c, {input, grad_output, weight, save_mean, save_var});
   if (input->scalar_type() == ScalarType::Half) {
     checkScalarType(c, weight, ScalarType::Float);
     checkScalarType(c, bias, ScalarType::Float);
   } else {
     checkAllSameType(c, {input, weight, bias});
   }
-  checkAllSameType(c, {input, output, grad_output});
+  checkAllSameType(c, {input, grad_output});
   checkAllSameType(c, {weight, bias, save_mean, save_var});
   // TODO: is weight required to be contiguous?
   checkAllContiguous(c, {save_mean, save_var});
@@ -258,8 +257,8 @@ std::tuple<Tensor, Tensor, Tensor> cudnn_batch_norm_backward(
   auto handle = getCudnnHandle();
   auto dataType = getCudnnDataType(*input);
 
-  TensorDescriptor idesc{ *input, 4 };  // input, output, grad_output descriptor
-  TensorDescriptor odesc{ *grad_output, 4 };  // input, output, grad_output descriptor
+  TensorDescriptor idesc{ *input, 4 };  // input, grad_output descriptor
+  TensorDescriptor odesc{ *grad_output, 4 };  // input, grad_output descriptor
   TensorDescriptor wdesc{ expandScale(*weight, input->dim()), 4 };  // descriptor for weight, bias, save_mean, etc.
 
   Constant one(dataType, 1);
@@ -289,7 +288,7 @@ std::tuple<Tensor, Tensor, Tensor> cudnn_batch_norm_backward(
   AT_CUDNN_CHECK(cudnnBatchNormalizationBackwardEx(
     handle, mode, op, &one, &zero, &one, &zero,
     idesc.desc(), input->data_ptr(),
-    idesc.desc(), output->data_ptr(),
+    nullptr, nullptr,
     odesc.desc(), grad_output->data_ptr(),
     nullptr, nullptr,
     idesc.desc(), grad_input_t.data_ptr(),

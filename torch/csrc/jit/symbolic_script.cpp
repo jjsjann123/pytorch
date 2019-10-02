@@ -1086,7 +1086,7 @@ const std::vector<std::string> functions = {
 
             def backward(grad_output):
                 dinput, dweight, dbias = torch._batch_norm_impl_index_backward(
-                    impl_idx, input, output, grad_output, weight, bias, running_mean, running_var,
+                    impl_idx, input, grad_output, weight, bias, running_mean, running_var,
                     save1, save2, training, eps, [True, has_weight, has_bias], reserve)
                 return dinput, dweight, dbias, None, None, None, None, None, None
 
@@ -1144,7 +1144,7 @@ const std::vector<std::string> functions = {
                 grad_bn_out = grad_bn_out.contiguous().view(1, n, -1)
 
                 grad_input, _, _ = torch._batch_norm_impl_index_backward(
-                    impl_idx, input_reshape, bn_out, grad_bn_out, None, None, None, None,
+                    impl_idx, input_reshape, grad_bn_out, None, None, None, None,
                     save1, save2, True, eps, [True, False, False], reserve)
 
                 grad_input = grad_input.view(input.size())
