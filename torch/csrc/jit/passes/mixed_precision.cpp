@@ -164,7 +164,7 @@ void GraphPartition::mergeNodesInBlock(Block* block) {
           }
         }
       }
- 			if (!merge_node) {
+if (!merge_node) {
         it++;
       } else {
         any_changed |= merge_node;
@@ -624,12 +624,14 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
         }
       });
 
-  std::cout << "=========================initial paint according to list=========================" << std::endl;
-  for (auto node : black_nodes) {
-    std::cout << "black node: " << *node << std::endl;
-  }
-  for (auto node : white_nodes) {
-    std::cout << "white node: " << *node << std::endl;
+  if (DEBUG) {
+    std::cout << "=========================initial paint according to list=========================" << std::endl;
+    for (auto node : black_nodes) {
+      std::cout << "black node: " << *node << std::endl;
+    }
+    for (auto node : white_nodes) {
+      std::cout << "white node: " << *node << std::endl;
+    }
   }
 
   GraphTraversalUtil::NodeSet black_upstream_nodes;
@@ -704,9 +706,11 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
         }
       });
 
-  std::cout << "=========================final paint=========================" << std::endl;
-  for (auto node : black_nodes) {
-    std::cout << "black node: " << *node << std::endl;
+  if (DEBUG) {
+    std::cout << "=========================final paint=========================" << std::endl;
+    for (auto node : black_nodes) {
+      std::cout << "black node: " << *node << std::endl;
+    }
   }
 
   // Paint white nodes
@@ -741,9 +745,11 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
         }
       });
 
-  std::cout << "=========================final paint part 2=========================" << std::endl;
-  for (auto node : white_nodes) {
-    std::cout << "white node: " << *node << std::endl;
+  if (DEBUG) {
+    std::cout << "=========================final paint part 2=========================" << std::endl;
+    for (auto node : white_nodes) {
+      std::cout << "white node: " << *node << std::endl;
+    }
   }
 
   // Try fusing white nodes
@@ -755,19 +761,21 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
   const auto amp_fp16_symbol = Symbol::fromQualString("prim::AmpGroup");
   GraphPartition gp(
       graph,
-			amp_fp16_symbol,
+      amp_fp16_symbol,
       [&](Node* n) -> bool {
 				return white_nodes.count(n) != 0 || n->kind() == amp_fp16_symbol;
 			},
-      true);
+      DEBUG);
   gp.partition();
 
   // FuseGraph inserts bunch of shape & Broadcast ops inside, which is not
   // needed since we'll inline the fusion afterwards;
   EliminateCommonSubexpression(graph);
   EliminateDeadCode(graph);
-  std::cout << "=========================graph partitioning=========================" << std::endl;
-  std::cout << *graph << std::endl;
+  if (DEBUG) {
+    std::cout << "=========================graph partitioning=========================" << std::endl;
+    std::cout << *graph << std::endl;
+  }
 
   // GraphPartition gp_second(
   //     graph,
@@ -822,25 +830,32 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
         }
       });
 
-  std::cout << "=========================cast inserted=========================" << std::endl;
-  std::cout << *graph << std::endl;
+  if (DEBUG) {
+    std::cout << "=========================cast inserted=========================" << std::endl;
+    std::cout << *graph << std::endl;
 
-  std::cout << "=========================final graph=========================" << std::endl;
+    std::cout << "=========================final graph=========================" << std::endl;
+  }
+
   graphTopoOrderModify(graph->block(),
       [&](const Node* n) -> bool {
         return n->kind() == amp_fp16_symbol;
       },
       [&](Node* n) -> graph_node_list::iterator {
-        std::cout << std::endl << "inlining " << std::endl;
-        std::cout << (*n);
-        std::cout << "done inlining " << std::endl;
+        if (DEBUG) {
+          std::cout << std::endl << "inlining " << std::endl;
+          std::cout << (*n);
+          std::cout << "done inlining " << std::endl;
+	}
         return ++inlineCallTo(n, *(n->g(attr::Subgraph))).back()->node()->reverseIterator();
       });
 
   EliminateCommonSubexpression(graph);
   EliminateDeadCode(graph);
 
-  std::cout << *graph << std::endl;
+  if (DEBUG) {
+    std::cout << *graph << std::endl;
+  }
 }
 
 } // namespace jit
