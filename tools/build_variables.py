@@ -164,6 +164,7 @@ libtorch_sources = [
     "torch/csrc/jit/fuser/interface.cpp",
     "torch/csrc/jit/function.cpp",
     "torch/csrc/jit/update_graph_executor_opt.cpp",
+    "torch/csrc/jit/update_graph_auto_casting.cpp",
     "torch/csrc/jit/mobile/function.cpp",
     "torch/csrc/jit/mobile/import.cpp",
     "torch/csrc/jit/mobile/module.cpp",

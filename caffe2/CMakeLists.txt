@@ -388,6 +388,7 @@ if (NOT INTERN_BUILD_MOBILE OR NOT BUILD_CAFFE2_MOBILE)
     ${TORCH_SRC_DIR}/csrc/jit/profiling_record.cpp
     ${TORCH_SRC_DIR}/csrc/jit/profiling_graph_executor_impl.cpp
     ${TORCH_SRC_DIR}/csrc/jit/update_graph_executor_opt.cpp
+    ${TORCH_SRC_DIR}/csrc/jit/update_graph_auto_casting.cpp
     ${TORCH_SRC_DIR}/csrc/jit/passes/alias_analysis.cpp
     ${TORCH_SRC_DIR}/csrc/jit/passes/batch_mm.cpp
     ${TORCH_SRC_DIR}/csrc/jit/passes/bailout_graph.cpp
