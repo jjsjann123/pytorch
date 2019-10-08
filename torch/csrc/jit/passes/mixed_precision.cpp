@@ -751,7 +751,8 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
   // prim::FusionGroup just to save us from confusion, although this temporary
   // node is not supposed to see the light of the day EVER.
   // TODO: we need to update that white_nodes list as we remove/destroy nodes!
-  const auto amp_fp16_symbol = Symbol::fromQualString("prim::FusionGroup");
+  //const auto amp_fp16_symbol = Symbol::fromQualString("prim::FusionGroup");
+  const auto amp_fp16_symbol = Symbol::fromQualString("prim::AmpGroup");
   GraphPartition gp(
       graph,
 			amp_fp16_symbol,

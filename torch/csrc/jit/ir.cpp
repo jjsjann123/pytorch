@@ -425,6 +425,7 @@ void Node::lint() const {
       // TODO: It's not good for these ops to be top-level, it makes cases
       // longer.
       break;
+    case prim::AmpGroup:
     case prim::FusionGroup:
       checkSameDevice(this);
       // TODO: Typecheck the parameters
