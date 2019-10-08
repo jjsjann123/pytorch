@@ -265,20 +265,55 @@ void GraphPartition::mergePartitions(Node* consumer_partition, Node* producer_pa
   std::vector<Node*> temporary_nodes;
   auto producer_subgraph = &getSubgraph(producer_partition);
 
+  if (debug_) {
+    std::cout << "------- subgraph nodes" << std::endl;
+    for (auto node : producer_subgraph->nodes()) {
+      node->dump();
+    }
+  }
   // inlineCallTo is not really safe to use here, because there's not protocol
   // on where the insertion is.
   {
     auto anchor_node = producer_partition->next();
     WithInsertPoint guard(producer_partition);
-    auto new_outputs =
-        insertGraph(*graph_, *producer_subgraph, producer_partition->inputs());
+
+    std::unordered_map<Value*, Value*> value_map;
+    auto value_map_func = [&](Value* v) { return value_map.at(v); };
+    AT_ASSERT(producer_subgraph->inputs().size() == producer_partition->inputs().size());
+    for (size_t i = 0; i < producer_partition->inputs().size(); ++i) {
+      value_map[producer_subgraph->inputs()[i]] = producer_partition->inputs()[i];
+    }
+    for (auto* node : producer_subgraph->nodes()) {
+      auto* new_node = graph_->insertNode(graph_->createClone(node, value_map_func));
+      temporary_nodes.emplace_back(new_node);
+      if (debug_) {
+        std::cout << "push inlining node: ";
+        new_node->dump();
+      }
+      for (size_t i = 0; i < node->outputs().size(); ++i) {
+        value_map[node->outputs()[i]] = new_node->outputs()[i];
+      }
+    }
+ 
+    std::vector<Value*> new_outputs;
+    for (auto* output : producer_subgraph->outputs()) {
+      new_outputs.push_back(value_map_func(output));
+    }
+//    auto new_outputs =
+//        insertGraph(*graph_, *producer_subgraph, producer_partition->inputs());
     const auto& old_outputs = producer_partition->outputs();
 
+    /*
     for (auto iter = ++(producer_partition->iterator());
 				 iter != anchor_node->iterator();
 				 iter++) {
+      if (debug_) {
+        std::cout << "push inlining node: ";
+        iter->dump();
+      }
       temporary_nodes.emplace_back(*iter);
     }
+    */
 
     AT_ASSERT(new_outputs.size() == old_outputs.size());
     for (size_t i = 0; i < old_outputs.size(); ++i) {
@@ -323,23 +358,32 @@ at::optional<Node*> GraphPartition::tryMerge(Node* consumer, Value* producer) {
 
   if (!shouldMerge) {
     if (debug_) {
-      std::cout << "==== failed" << std::endl;
+      std::cout << "==== should not merge" << std::endl;
     }
     return at::nullopt;
   }
 
   if (debug_) {
-    std::cout << "==== succeeded" << std::endl;
+    std::cout << "==== should merge" << std::endl;
   }
 
   auto partition = consumer;
   if (consumer->kind() != kind_) {
+    if (debug_) {
+      std::cout << "==== create single node partition" << std::endl;
+    }
     partition = createSingleNodePartition(consumer);
   }
 
   if (producer->node()->kind() == kind_) {
+    if (debug_) {
+      std::cout << "==== merge two partitions" << std::endl;
+    }
     mergePartitions(partition, producer->node());
     return partition;
+  }
+  if (debug_) {
+    std::cout << "==== merge single node into partition" << std::endl;
   }
   Node* merged = mergeNodeIntoPartition(partition, producer->node());
   producer->node()->destroy();
@@ -713,7 +757,8 @@ void graphPartitioning(std::shared_ptr<Graph>& graph) {
 			amp_fp16_symbol,
       [&](Node* n) -> bool {
 				return white_nodes.count(n) != 0 || n->kind() == amp_fp16_symbol;
-			});
+			},
+      true);
   gp.partition();
 
   // FuseGraph inserts bunch of shape & Broadcast ops inside, which is not
