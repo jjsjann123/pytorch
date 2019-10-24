@@ -307,6 +307,7 @@ void AliasDb::analyzeImpl(Node* node) {
     case prim::Loop:
       return analyzeLoop(node);
     case prim::FusionGroup:
+    case prim::AmpGroup:
     case prim::DifferentiableGraph:
       return analyzeSubgraph(node);
     case prim::fork:
@@ -1222,6 +1223,7 @@ bool aliasAnalysisHasSpecialCaseFor(Symbol symbol) {
       prim::If,
       prim::Loop,
       prim::FusionGroup,
+      prim::AmpGroup,
       prim::DifferentiableGraph,
       prim::Constant,
       prim::Uninitialized,
