@@ -15,21 +15,8 @@ public:
   CUDAFusionBackend(isFusibleFunc is_fusible,
       fuseFunc fuse,
       compileFusionFunc compile_fusion,
-      callFusionfunc call_fusion) :
+      callFusionFunc call_fusion) :
     FusionBackend(is_fusible, fuse, compile_fusion, call_fusion) {}
-}
-
-TORCH_API void registerFusionBackend(
-    at::Device::Type backend_type,
-    FusedKernelConstructor ctor);
-TORCH_API bool hasFusionBackend(at::Device::Type backend_type);
-
-struct TORCH_API RegisterFusionBackend {
-  RegisterFusionBackend(
-      at::Device::Type backend_type,
-      FusedKernelConstructor ctor) {
-    registerFusionBackend(backend_type, std::move(ctor));
-  }
 };
 
 TORCH_API bool isFusibleOnCUDA(const Node* const node);

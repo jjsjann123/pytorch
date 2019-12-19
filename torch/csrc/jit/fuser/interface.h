@@ -21,12 +21,15 @@ namespace jit {
 #define FUSER_DEBUG 1
 
 class FusionBackend {
+public:
   typedef bool (*isFusibleFunc)(const Node* const);
   typedef int (*fuseFunc)(const Node* const);
   typedef void (*compileFusionFunc)(Node*);
-  typedef void (*callFusionFunc)(const Node* const, Stack&);
+  typedef void (*callFusionFunc)(
+      const Node* const fusion,
+      std::vector<at::Tensor>&,
+      at::ArrayRef<IValue>);
 
-public:
   FusionBackend(isFusibleFunc is_fusible,
       fuseFunc fuse,
       compileFusionFunc compile_fusion,
@@ -39,7 +42,10 @@ public:
   bool isFusible(const Node* const node);
   int fuse(const Node* const node);
   void compileFusion(Node* fusion);
-  void callFusion(const Node* const node, Stack& stack);
+  void callFusion(
+      const Node* const fusion,
+      std::vector<at::Tensor>&,
+      at::ArrayRef<IValue>);
 
 protected:
   isFusibleFunc is_fusible_;

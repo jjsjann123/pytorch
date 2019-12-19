@@ -267,6 +267,6 @@ static CUDAFusionBackend cuda_backend(
     compileFusionOnCUDA,
     callFusionOnCUDA);
 
-RegisterFusionBackendEx reg(at::DeviceType::CUDA, cuda_backend);
+//RegisterFusionBackendEx reg_ex(at::DeviceType::CUDA, &cuda_backend);
 
 }}}}

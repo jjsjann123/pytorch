@@ -104,8 +104,11 @@ int FusionBackend::fuse(const Node* const node) {
 void FusionBackend::compileFusion(Node* node) {
   return compile_fusion_(node);
 }
-void FusionBackend::callFusion(const Node* const node, Stack& stack) {
-  return call_fusion_(node, stack);
+void FusionBackend::callFusion(
+    const Node* const fusion,
+    std::vector<at::Tensor>& outputs,
+    at::ArrayRef<IValue> inputs) {
+  return call_fusion_(fusion, outputs, inputs);
 }
 
 // Returns true iff the node is fusible
@@ -211,7 +214,7 @@ void callFusion(const Node* const fusion, Stack& stack) {
     case c10::kCUDA:
       TORCH_CHECK((getFusionBackendsEx().count(device.type()) > 0),
           "Trying to run fusion on device type without register FusionBackend!");
-      return getFusionBackendsEx()[device.type()]->callFusion(fusion, stack);
+      return getFusionBackendsEx()[device.type()]->callFusion(fusion, outputs, inputs);
     default:
       TORCH_CHECK(false, "Acquired an unknown fusion device type!");
   }
