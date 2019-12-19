@@ -261,4 +261,12 @@ TORCH_API void callFusionOnCUDA(
   at::cuda::set_device(prior_device);
 }
 
+static CUDAFusionBackend cuda_backend(
+    isFusibleOnCUDA,
+    fuseOnCUDA,
+    compileFusionOnCUDA,
+    callFusionOnCUDA);
+
+RegisterFusionBackendEx reg(at::DeviceType::CUDA, cuda_backend);
+
 }}}}

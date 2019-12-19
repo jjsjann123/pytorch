@@ -20,6 +20,45 @@ namespace jit {
 
 #define FUSER_DEBUG 1
 
+class FusionBackend {
+  typedef bool (*isFusibleFunc)(const Node* const);
+  typedef int (*fuseFunc)(const Node* const);
+  typedef void (*compileFusionFunc)(Node*);
+  typedef void (*callFusionFunc)(const Node* const, Stack&);
+
+public:
+  FusionBackend(isFusibleFunc is_fusible,
+      fuseFunc fuse,
+      compileFusionFunc compile_fusion,
+      callFusionFunc call_fusion) :
+  is_fusible_(is_fusible),
+  fuse_(fuse),
+  compile_fusion_(compile_fusion),
+  call_fusion_(call_fusion) {}
+
+  bool isFusible(const Node* const node);
+  int fuse(const Node* const node);
+  void compileFusion(Node* fusion);
+  void callFusion(const Node* const node, Stack& stack);
+
+protected:
+  isFusibleFunc is_fusible_;
+  fuseFunc fuse_;
+  compileFusionFunc compile_fusion_;
+  callFusionFunc call_fusion_;
+};
+
+TORCH_API void registerFusionBackendEx(
+    at::Device::Type backend_type,
+    FusionBackend* backend);
+TORCH_API bool hasFusionBackendEx(at::Device::Type backend_type);
+
+struct TORCH_API RegisterFusionBackendEx {
+  RegisterFusionBackendEx(
+      at::Device::Type backend_type,
+      FusionBackend* backend);
+};
+
 // Returns true iff the node is fusible
 TORCH_API bool isFusible(const Node* const node);
 
@@ -32,7 +71,6 @@ TORCH_API void compileFusion(Node* fusion);
 
 // TODO: remove key, it can be acquired from the node
 TORCH_API void callFusion(const Node* const node, Stack& stack);
-
 
 /*
  * OLD INTERFACE BELOW
