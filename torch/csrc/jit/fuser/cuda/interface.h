@@ -7,9 +7,6 @@ namespace jit {
 namespace fuser {
 namespace cuda {
 
-using IsFusibleFunction = std::function<bool>(const Node* const);
-using FuseFunction = std::function<int>(const Node* const);
-
 class CUDAFusionBackend : public FusionBackend {
 public:
   CUDAFusionBackend(isFusibleFunc is_fusible,

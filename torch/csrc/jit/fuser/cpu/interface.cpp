@@ -82,5 +82,12 @@ void callFusionOnCPU(
   (*p)();
 }
 
+static CPUFusionBackend cpu_backend(
+    isFusibleOnCPU,
+    fuseOnCPU,
+    compileFusionOnCPU,
+    callFusionOnCPU);
+
+RegisterFusionBackendEx reg_ex(at::DeviceType::CPU, &cpu_backend);
 
 }}}} // namespace torch::jit::fuser::cpu
