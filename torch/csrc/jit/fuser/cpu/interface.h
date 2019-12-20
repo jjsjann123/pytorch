@@ -11,22 +11,13 @@ namespace cpu {
 
 class CPUFusionBackend : public FusionBackend {
 public:
-  CPUFusionBackend(isFusibleFunc is_fusible,
-      fuseFunc fuse,
-      compileFusionFunc compile_fusion,
-      callFusionFunc call_fusion) :
-    FusionBackend(is_fusible, fuse, compile_fusion, call_fusion) {}
+  virtual bool isFusible(const Node* const node) override;
+  virtual int fuse(const Node* const node) override;
+  virtual void compileFusion(Node* fusion) override;
+  virtual void callFusion(
+      const Node* const fusion,
+      std::vector<at::Tensor>&,
+      at::ArrayRef<IValue>) override;
 };
-
-TORCH_API bool isFusibleOnCPU(const Node* const node);
-
-TORCH_API int fuseOnCPU(const Node* const node);
-
-TORCH_API void compileFusionOnCPU(Node* fusion);
-
-TORCH_API void callFusionOnCPU(
-  const Node* const fusion
-, std::vector<at::Tensor>& outputs
-, at::ArrayRef<IValue> inputs);
 
 }}}} // namespace torch::jit::fuser::cpu

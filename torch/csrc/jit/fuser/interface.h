@@ -22,36 +22,13 @@ namespace jit {
 
 class FusionBackend {
 public:
-  typedef bool (*isFusibleFunc)(const Node* const);
-  typedef int (*fuseFunc)(const Node* const);
-  typedef void (*compileFusionFunc)(Node*);
-  typedef void (*callFusionFunc)(
+  virtual bool isFusible(const Node* const node) = 0;
+  virtual int fuse(const Node* const node) = 0;
+  virtual void compileFusion(Node* fusion) = 0;
+  virtual void callFusion(
       const Node* const fusion,
       std::vector<at::Tensor>&,
-      at::ArrayRef<IValue>);
-
-  FusionBackend(isFusibleFunc is_fusible,
-      fuseFunc fuse,
-      compileFusionFunc compile_fusion,
-      callFusionFunc call_fusion) :
-  is_fusible_(is_fusible),
-  fuse_(fuse),
-  compile_fusion_(compile_fusion),
-  call_fusion_(call_fusion) {}
-
-  bool isFusible(const Node* const node);
-  int fuse(const Node* const node);
-  void compileFusion(Node* fusion);
-  void callFusion(
-      const Node* const fusion,
-      std::vector<at::Tensor>&,
-      at::ArrayRef<IValue>);
-
-protected:
-  isFusibleFunc is_fusible_;
-  fuseFunc fuse_;
-  compileFusionFunc compile_fusion_;
-  callFusionFunc call_fusion_;
+      at::ArrayRef<IValue>) = 0;
 };
 
 TORCH_API void registerFusionBackendEx(

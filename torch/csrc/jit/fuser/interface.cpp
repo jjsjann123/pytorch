@@ -95,22 +95,6 @@ RegisterFusionBackendEx::RegisterFusionBackendEx(
   registerFusionBackendEx(backend_type, backend);
 }
 
-bool FusionBackend::isFusible(const Node* const node) {
-  return is_fusible_(node);
-}
-int FusionBackend::fuse(const Node* const node) {
-  return fuse_(node);
-}
-void FusionBackend::compileFusion(Node* node) {
-  return compile_fusion_(node);
-}
-void FusionBackend::callFusion(
-    const Node* const fusion,
-    std::vector<at::Tensor>& outputs,
-    at::ArrayRef<IValue> inputs) {
-  return call_fusion_(fusion, outputs, inputs);
-}
-
 // Returns true iff the node is fusible
 bool isFusible(const Node* const node) {
   if (!validateNode(node)) {
