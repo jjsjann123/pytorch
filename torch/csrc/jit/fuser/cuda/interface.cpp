@@ -205,7 +205,7 @@ void CUDAFusionBackend::compileFusion(Node* fusion) {
       std::cout << kernel_string << std::endl;
       std::cout << "---------------------" << std::endl;
       auto func_name = "Fuser::" + kernel_name + "<" +
-          Fuser::getTypeName<Fuser::IO_struct<float>>() + ">";
+          Fuser::getTypeName<Fuser::IO_struct<float, int32_t, 4>>() + ">";
       std::cout << func_name << std::endl;
       
       // Major and minor is determined by device properties and
@@ -277,7 +277,7 @@ void CUDAFusionBackend::callFusion(
   // arguments.push_back(&operand1);
   // void *output = outputs[0].data_ptr();
   // arguments.push_back(&output);
-  Fuser::IO_struct<float> operand0;
+  Fuser::IO_struct<float, int32_t, 4> operand0;
   auto t = inputs[0].toTensor();
   operand0.data = t.data_ptr<float>();
   for (int i = 0; i < t.dim(); i++) {
@@ -286,7 +286,7 @@ void CUDAFusionBackend::callFusion(
   }
   arguments.push_back(&operand0);
 
-  Fuser::IO_struct<float> operand1;
+  Fuser::IO_struct<float, int32_t, 4> operand1;
   t = inputs[1].toTensor();
   operand1.data = t.data_ptr<float>();
   for (int i = 0; i < t.dim(); i++) {
@@ -295,7 +295,7 @@ void CUDAFusionBackend::callFusion(
   }
   arguments.push_back(&operand1);
 
-  Fuser::IO_struct<float> output;
+  Fuser::IO_struct<float, int32_t, 4> output;
   output.data = outputs[0].data_ptr<float>();
   for (int i = 0; i < t.dim(); i++) {
     output.shapes[i] = outputs[0].sizes()[i];
