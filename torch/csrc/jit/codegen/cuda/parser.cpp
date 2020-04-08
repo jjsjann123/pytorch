@@ -223,10 +223,10 @@ class IrParser {
 
   bool registerTensor(const JitValue* val) {
     CgValue* cg_val;
-    if (val->isCompleteTensor()) {
+    if (auto type = val->type()->cast<TensorType>()) {
       // TODO: make this a static function in Tensor class;
       // create tensor;
-      cg_val = new TensorView(val->type()->cast<TensorType>());
+      cg_val = new TensorView(type);
       value_maps_.emplace(val->unique(), cg_val);
       return true;
     }
