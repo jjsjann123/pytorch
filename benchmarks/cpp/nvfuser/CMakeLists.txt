@@ -1,5 +1,6 @@
 
 add_executable(nvfuser_bench
+  normalization.cpp
   lstm_cell.cpp
   gelu_backward.cpp
   main.cpp)
