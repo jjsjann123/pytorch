@@ -325,10 +325,15 @@ std::vector<at::Tensor> FusionExecutorCache::runFusionWithInputs(
     // caching strategy is different for pw-fusion and reduction-fusion.
     if (has_reduction_) {
       // Generate the reduction parameters
+      /*
       auto reduction_params = (reduction_tv_.size() > 1)
           ? getMultipleReductionHeuristics(fusion_.get(), inputs, reduction_tv_)
           : getReductionHeuristics(
                 fusion_.get(), inputs, reduction_tv_.front());
+      */
+
+      auto reduction_params =
+          getMultipleReductionHeuristics(fusion_.get(), inputs, reduction_tv_);
 
       TORCH_INTERNAL_ASSERT(
           reduction_params.has_value(),
@@ -365,6 +370,13 @@ std::vector<at::Tensor> FusionExecutorCache::runFusionWithInputs(
           }
         }
 
+        scheduleMultipleReduction(
+            &fusion_clone,
+            reduction_params.value(),
+            clone_reduction_tv,
+            clone_other_tv);
+
+        /*
         if (clone_reduction_tv.size() > 1) {
           scheduleMultipleReduction(
               &fusion_clone,
@@ -390,6 +402,7 @@ std::vector<at::Tensor> FusionExecutorCache::runFusionWithInputs(
               single_reduction_tv,
               tv_outputs_of_reduction);
         }
+        */
 
         // This means we have not found a previously generated kernel that is
         // compatible with the new reduction params. We need to finish codegen.

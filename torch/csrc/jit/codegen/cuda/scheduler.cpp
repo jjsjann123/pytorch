@@ -454,9 +454,11 @@ TORCH_CUDA_API c10::optional<ReductionParams> getMultipleReductionHeuristics(
     return c10::nullopt;
   }
 
+  /*
   TORCH_INTERNAL_ASSERT(
       reduction_tv.size() > 1,
       "A single reduction tv was detected. Use getReductionHeuristics.");
+      */
 
   // Check Reduction Invariants
   for (auto tv : reduction_tv) {
