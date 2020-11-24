@@ -1137,10 +1137,12 @@ void scheduleMultipleReduction(
         // 4) ComputeAt Structure
         const int kComputeAtAxis = 1;
         for (auto input : in_tv) {
-          for (auto output : out_tv) {
-            if (input->getRootDomain().size() ==
-                output->getRootDomain().size()) {
-              input->computeAt(output, kComputeAtAxis);
+          if (!fusion->unordered_uses(input).empty()) {
+            for (auto output : out_tv) {
+              if (input->getRootDomain().size() ==
+                  output->getRootDomain().size()) {
+                input->computeAt(output, kComputeAtAxis);
+              }
             }
           }
         }
@@ -1219,10 +1221,12 @@ void scheduleMultipleReduction(
         // 3) ComputeAt Structure
         const int kComputeAtAxis = 1;
         for (auto input : in_tv) {
-          for (auto output : out_tv) {
-            if (input->getRootDomain().size() ==
-                output->getRootDomain().size()) {
-              input->computeAt(output, kComputeAtAxis);
+          if (!fusion->unordered_uses(input).empty()) {
+            for (auto output : out_tv) {
+              if (input->getRootDomain().size() ==
+                  output->getRootDomain().size()) {
+                input->computeAt(output, kComputeAtAxis);
+              }
             }
           }
         }
@@ -1363,13 +1367,16 @@ void scheduleMultipleReduction(
     TORCH_INTERNAL_ASSERT(kBIDyAxis > 0);
     const int kTIDyAxis = kBIDyAxis + 1;
 
+
     // 3) ComputeAt structure
     // [outer-lft, BDX?, inner-lft, BDY, TDY, reduction-lft, TDX?]
     const int kComputeAtAxis = kTIDyAxis + 1;
     for (auto input : in_tv) {
-      for (auto output : out_tv) {
-        if (input->getRootDomain().size() == output->getRootDomain().size()) {
-          input->computeAt(output, kComputeAtAxis);
+      if (!fusion->unordered_uses(input).empty()) {
+        for (auto output : out_tv) {
+          if (input->getRootDomain().size() == output->getRootDomain().size()) {
+            input->computeAt(output, kComputeAtAxis);
+          }
         }
       }
     }

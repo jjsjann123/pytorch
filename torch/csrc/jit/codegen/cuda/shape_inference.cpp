@@ -170,6 +170,11 @@ class NaiveTypePropagator {
         node->output()->setType(out_type);
         break;
       }
+      case aten::_softmax_backward_data: {
+        auto out_type = node->input(0)->type()->cast<TensorType>();
+        node->output()->setType(out_type);
+        break;
+      }
       case aten::sum: {
         auto out_type = node->input(0)->type()->cast<TensorType>();
 

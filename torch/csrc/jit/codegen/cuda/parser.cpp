@@ -677,6 +677,40 @@ class IrParser {
 
     {
       auto ptr_op = getOperatorForLiteral(
+          "aten::_softmax_backward_data(Tensor grad_output, Tensor output, int dim, Tensor self) -> Tensor");
+      registerParseRule(
+          ptr_op,
+          [](const Node* node,
+             std::unordered_map<size_t, CgValue>& value_map) -> void {
+            auto grad_output =
+                value_map[node->input(0)->unique()]->as<TensorView>();
+            auto output = value_map[node->input(1)->unique()]->as<TensorView>();
+            auto dim_value = constant_as<int>(node->input(2));
+            TORCH_INTERNAL_ASSERT(
+                dim_value.has_value(), "dim in softmax is not valid");
+            auto input = value_map[node->input(3)->unique()]->as<TensorView>();
+
+            const int kNumberOfDims = input->nDims();
+            int kReductionAxis = dim_value.value();
+            if (kReductionAxis < 0) {
+              kReductionAxis += int(input->nDims());
+            }
+
+            std::vector<bool> broadcast_mask(kNumberOfDims, false);
+            broadcast_mask[kReductionAxis] = true;
+
+            auto* new_grad = mul(grad_output, output);
+            auto* sum_new_grad = sum(new_grad, {kReductionAxis});
+            auto* bcast_sum = broadcast(sum_new_grad, broadcast_mask);
+            auto* output_sum_mul = mul(output, bcast_sum);
+            auto* grad_input = sub(new_grad, output_sum_mul);
+
+            value_map.emplace(node->output()->unique(), grad_input);
+          });
+    }
+
+    {
+      auto ptr_op = getOperatorForLiteral(
           "aten::sum.dim_IntList(Tensor self, int[1] dim, bool keepdim=False, *, int? dtype=None) -> (Tensor)");
       registerParseRule(
           ptr_op,
