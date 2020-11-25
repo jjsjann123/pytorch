@@ -104,9 +104,9 @@ bool hasReductionOperation(const Node* node) {
 bool maybeBroadcastOnShape(
     const Node* n,
     const std::vector<c10::optional<int64_t>>& shape) {
-  TORCH_INTERNAL_ASSERT(
-      n->outputs().size() == 1,
-      "not expecting multiple outputs from a node, graph partitioning logic needs to be updated");
+  //TORCH_INTERNAL_ASSERT(
+  //    n->outputs().size() == 1,
+  //    "not expecting multiple outputs from a node, graph partitioning logic needs to be updated");
   // assumes that if output is not a tensor type, it's not broadcasting
   if (auto out_type = n->output(0)->type()->cast<TensorType>()) {
     if (out_type->dim()) {

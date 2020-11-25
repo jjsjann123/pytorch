@@ -1448,6 +1448,7 @@ void scheduleMultipleReduction(
       }
     }
   } // end non_fastest_dim logic
+  fusion->printKernel();
 }
 
 } // namespace cuda

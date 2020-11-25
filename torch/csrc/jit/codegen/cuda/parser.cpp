@@ -644,6 +644,93 @@ class IrParser {
 
     {
       auto ptr_op = getOperatorForLiteral(
+          "aten::native_layer_norm(Tensor input, Tensor? weight, Tensor? bias, int M, int N, float eps) -> (Tensor, Tensor, Tensor)");
+      registerParseRule(
+          ptr_op,
+          [](const Node* node,
+             std::unordered_map<size_t, CgValue>& value_map) -> void {
+            auto input = value_map[node->input(0)->unique()]->as<TensorView>();
+
+            TensorView* weight = nullptr;
+            if (!node->input(1)->type()->isSubtypeOf(
+                    static_cast<c10::TypePtr>(NoneType::get()))) {
+              weight = value_map[node->input(1)->unique()]->as<TensorView>();
+            }
+
+            TensorView* bias = nullptr;
+            if (!node->input(2)->type()->isSubtypeOf(
+                    static_cast<c10::TypePtr>(NoneType::get()))) {
+              bias = value_map[node->input(2)->unique()]->as<TensorView>();
+            }
+
+            // M = product of [0, reduction_axis)
+            auto M = constant_as<float>(node->input(3));
+            TORCH_INTERNAL_ASSERT(
+                M.has_value(), "The M parameter is required.");
+            const float kBatchSize = M.value();
+
+
+            // N = product of [reduction_axis, input_ndims]
+            // Repurposed for NvFuser such that N = norm_shape_ndims
+            // so we can construct reduction_axes and broadcast_mask
+            auto N = constant_as<float>(node->input(4));
+            TORCH_INTERNAL_ASSERT(
+                N.has_value(), "The N parameter is required.");
+            const float kNormShapeNumDims = N.value();
+
+            auto eps = constant_as<float>(node->input(5));
+            TORCH_INTERNAL_ASSERT(
+                eps.has_value(), "The EPS parameter is required.");
+            const float kEps = eps.value();
+
+            std::vector<int> reduction_axes(kNormShapeNumDims);
+            std::vector<bool> broadcast_mask(input->nDims(), false);
+            Val* num_features = nullptr;
+            for (size_t idx = 0; idx < kNormShapeNumDims; ++idx) {
+              const size_t axis = input->nDims() - 1 - idx;
+              reduction_axes[idx] = axis;
+              broadcast_mask[axis] = true;
+              num_features = (num_features == nullptr)
+                  ? input->domain()->domain()[axis]->extent()
+                  : mul(num_features,
+                        input->domain()->domain()[axis]->extent());
+            }
+
+            // TODO: NAN when mean and variance are zero
+            // --ftz=true -- flush-to-zero
+
+            // Algorithm
+            auto x_sum = sum(input, reduction_axes);
+            auto x_sum_bcast = broadcast(x_sum, broadcast_mask);
+            auto x_mean = div(x_sum_bcast, num_features);
+            auto x_mean_sub = sub(input, x_mean);
+            auto x_mean_sub_pow = mul(x_mean_sub, x_mean_sub);
+            auto var_sum = sum(x_mean_sub_pow, reduction_axes);
+            auto var_sum_bcast = broadcast(var_sum, broadcast_mask);
+            auto var = div(var_sum_bcast, num_features);
+            auto var_eps = add(var, new Float(kEps));
+            auto rvar = unaryOp(UnaryOpType::Rsqrt, var_eps);
+            auto output = mul(x_mean_sub, rvar);
+
+            // Optional: norm * weight
+            if (weight) {
+              auto weight_bcast = broadcast(weight, broadcast_mask);
+              output = mul(output, weight_bcast);
+            }
+
+            // Optional: norm * weight + bias
+            if (bias) {
+              auto bias_bcast = broadcast(bias, broadcast_mask);
+              output = add(output, bias_bcast);
+            }
+            value_map.emplace(node->output(0)->unique(), output);
+            value_map.emplace(node->output(1)->unique(), x_mean);
+            value_map.emplace(node->output(2)->unique(), rvar);
+          });
+    }
+
+    {
+      auto ptr_op = getOperatorForLiteral(
           "aten::softmax.int(Tensor self, int dim, int? dtype) -> Tensor");
       registerParseRule(
           ptr_op,
