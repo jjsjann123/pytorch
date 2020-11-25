@@ -29,6 +29,35 @@ namespace at { namespace cuda {
 
 #ifndef __HIP_PLATFORM_HCC__
 
+// nvrtcGetCUBIN... is only available with CUDA >= 11.1
+#if CUDA_VERSION >= 11010
+#define AT_FORALL_NVRTC(_)                       \
+  _(nvrtcVersion)                                \
+  _(nvrtcAddNameExpression)                      \
+  _(nvrtcCreateProgram)                          \
+  _(nvrtcDestroyProgram)                         \
+  _(nvrtcGetPTXSize)                             \
+  _(nvrtcGetPTX)                                 \
+  _(nvrtcGetCUBINSize)                           \
+  _(nvrtcGetCUBIN)                               \
+  _(nvrtcCompileProgram)                         \
+  _(nvrtcGetErrorString)                         \
+  _(nvrtcGetProgramLogSize)                      \
+  _(nvrtcGetProgramLog)                          \
+  _(nvrtcGetLoweredName)                         \
+  _(cuModuleLoadData)                            \
+  _(cuModuleLoadDataEx)                          \
+  _(cuModuleGetFunction)                         \
+  _(cuOccupancyMaxActiveBlocksPerMultiprocessor) \
+  _(cuGetErrorString)                            \
+  _(cuLaunchKernel)                              \
+  _(cuCtxGetCurrent)                             \
+  _(cuModuleUnload)                              \
+  _(cuDevicePrimaryCtxGetState)                  \
+  _(cuLinkCreate)                                \
+  _(cuLinkAddData)                               \
+  _(cuLinkComplete)
+#else
 #define AT_FORALL_NVRTC(_)                       \
   _(nvrtcVersion)                                \
   _(nvrtcAddNameExpression)                      \
@@ -53,6 +82,7 @@ namespace at { namespace cuda {
   _(cuLinkCreate)                                \
   _(cuLinkAddData)                               \
   _(cuLinkComplete)
+#endif
 
 #else
 
