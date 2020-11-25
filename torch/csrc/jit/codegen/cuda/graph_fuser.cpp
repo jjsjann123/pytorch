@@ -238,9 +238,11 @@ struct CudaGraphFuser {
     // have a valid mapping
     group->insertBefore(n);
     Node* mergedNode = mergeNodeIntoGroup(group, n);
-    getSubgraph(group).registerOutput(mergedNode->output());
-    auto sel = group->addOutput();
-    sel->copyMetadata(n->output());
+    for (int i = 0; i < n->outputs().size(); i++) {
+      getSubgraph(group).registerOutput(mergedNode->output(i));
+      auto sel = group->addOutput();
+      sel->copyMetadata(n->output(i));
+    }
     n->replaceAllUsesWith(group);
     n->destroy();
     return group;
@@ -287,6 +289,7 @@ struct CudaGraphFuser {
     // fusion in cases where uses remain after the consumer
     // if these exist, re-route them to the version of producer
     // created in FusionGroup
+
     if (producer->uses().size() != 0) {
       getSubgraph(group).registerOutput(merged->output());
       Value* new_producer = group->addOutput();
@@ -770,12 +773,18 @@ struct CudaGraphFuser {
         shape_of.emplace(n->output(), size);
         continue;
       }
+      //if (n->kind() == aten::native_layer_norm) {
+      if (n->kind() == c10::Symbol::fromQualString("aten::native_layer_norm")) {
+        shape_of.emplace(n->output(0), shape_of.at(n->input(0)));
+        continue;
+      }
       auto tensor_inputs = filter(n->inputs(), [](Value* v) {
         return v->type()->isSubtypeOf(TensorType::get());
       });
       auto shapes =
           fmap(tensor_inputs, [&](Value* v) { return shape_of.at(v); });
       AT_ASSERT(!shapes.empty());
+      
       shape_of.emplace(
           n->output(), shapes.size() == 1 ? shapes[0] : broadcastSizes(shapes));
     }
