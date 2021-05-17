@@ -51,6 +51,18 @@ std::string kernelPreamble() {
 
 namespace {
 
+// Largest Power of 2 less-than n
+constexpr int64_t lastPow2(int64_t n) {
+  TORCH_INTERNAL_ASSERT(n >= 0);
+  n |= (n >> 1);
+  n |= (n >> 2);
+  n |= (n >> 4);
+  n |= (n >> 8); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+  n |= (n >> 16); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+  n |= (n >> 32); // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+  return std::max((int64_t)1, n - (n >> 1));
+}
+
 // return false if arg's type, number of dimensions, and device, doesn't match
 // param and provided c10:device
 bool validateKernelArgTensor(
@@ -593,7 +605,8 @@ ExpressionEvaluator bindFusionInputs(
 NvrtcFunction nvrtcCompile(
     const std::string& code,
     const std::string& func_name,
-    int id) {
+    int id,
+    c10::optional<int> opt_block_size) {
   FUSER_PERF_SCOPE("NVRTC");
 
   // lazily construct context if non-existing yet;
@@ -672,6 +685,26 @@ NvrtcFunction nvrtcCompile(
 #ifndef NDEBUG
   args.push_back("-lineinfo");
 #endif
+
+  // TODO: double check the math with occupancy header
+  if (opt_block_size.has_value()) {
+    // int num_partition;
+    // cudaOccSubPartitionsPerMultiprocessor(&num_partition, prop);
+    int num_partition = 4;
+    int num_warps = ceilDiv(opt_block_size.value(), 32);
+    int max_warps_per_sm_partition = ceilDiv(num_warps, num_partition);
+
+    int max_register = lastPow2(prop->regsPerMultiprocessor / num_partition / 32 / max_warps_per_sm_partition);
+    std::string max_register_usage = "--maxrregcount=";
+    max_register_usage += std::to_string(max_register);
+    std::cout << "maximum register usage specified as: " << max_register_usage << std::endl
+              << "max register: " << prop->regsPerMultiprocessor << std::endl
+              << "max num_partition: " << num_partition << std::endl
+              << "block size: " << opt_block_size.value() << std::endl
+              << "max max_warps_per_sm_partition: " << max_warps_per_sm_partition << std::endl;
+    args.push_back(max_register_usage.c_str());
+    //args.push_back("--maxrregcount=90");
+  }
 
   const char* ptxas_opt_level = getenv("PYTORCH_NVFUSER_JIT_OPT_LEVEL");
   uint32_t jit_opt_level = 0;
