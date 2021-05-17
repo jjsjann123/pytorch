@@ -63,6 +63,10 @@ constexpr int64_t lastPow2(int64_t n) {
   return std::max((int64_t)1, n - (n >> 1));
 }
 
+constexpr int64_t roundUp(int64_t x, int64_t y) {
+  return y * ceilDiv(x, y);
+}
+
 // return false if arg's type, number of dimensions, and device, doesn't match
 // param and provided c10:device
 bool validateKernelArgTensor(
@@ -685,25 +689,41 @@ NvrtcFunction nvrtcCompile(
 #ifndef NDEBUG
   args.push_back("-lineinfo");
 #endif
+  args.push_back("-G");
 
+  // keeping this outside the loop for lifetime;
+  std::string max_register_usage = "--maxrregcount=";
   // TODO: double check the math with occupancy header
   if (opt_block_size.has_value()) {
     // int num_partition;
     // cudaOccSubPartitionsPerMultiprocessor(&num_partition, prop);
+    // status = cudaOccRegAllocationGranularity(
+    //     &allocationGranularity,
+    //     properties);
     int num_partition = 4;
-    int num_warps = ceilDiv(opt_block_size.value(), 32);
+    int reg_allocation_granularity = 256;
+    int warp_size = 32;
+
+    int num_warps = ceilDiv(opt_block_size.value(), warp_size);
     int max_warps_per_sm_partition = ceilDiv(num_warps, num_partition);
 
-    int max_register = lastPow2(prop->regsPerMultiprocessor / num_partition / 32 / max_warps_per_sm_partition);
-    std::string max_register_usage = "--maxrregcount=";
+    int hardware_warps_mem_check = roundUp(num_warps, num_partition);
+    int max_reg_per_warp = prop->regsPerBlock / hardware_warps_mem_check / reg_allocation_granularity * reg_allocation_granularity;
+    int max_register = max_reg_per_warp / warp_size;
+
     max_register_usage += std::to_string(max_register);
     std::cout << "maximum register usage specified as: " << max_register_usage << std::endl
               << "max register: " << prop->regsPerMultiprocessor << std::endl
+              << "max register per block: " << prop->regsPerBlock << std::endl
+              << "hardware_warps_mem_check: " << hardware_warps_mem_check << std::endl
               << "max num_partition: " << num_partition << std::endl
+              << "max_reg_per_warp: " << max_reg_per_warp << std::endl
               << "block size: " << opt_block_size.value() << std::endl
               << "max max_warps_per_sm_partition: " << max_warps_per_sm_partition << std::endl;
     args.push_back(max_register_usage.c_str());
-    //args.push_back("--maxrregcount=90");
+
+    args.push_back("--ptxas-options");
+    args.push_back("--verbose");
   }
 
   const char* ptxas_opt_level = getenv("PYTORCH_NVFUSER_JIT_OPT_LEVEL");
@@ -744,6 +764,13 @@ NvrtcFunction nvrtcCompile(
 
       TORCH_INTERNAL_ASSERT(
           false, code.c_str(), "\nCUDA NVRTC compile error: ", log.data());
+    } else {
+      size_t logsize;
+      at::globalContext().getNVRTC().nvrtcGetProgramLogSize(program, &logsize);
+      std::vector<char> log(logsize);
+      at::globalContext().getNVRTC().nvrtcGetProgramLog(program, log.data());
+
+      std::cout << "\nCUDA NVRTC compile log: " << log.data() << std::endl;
     }
 
     AT_CUDA_NVRTC_CHECK(result);
