@@ -557,7 +557,6 @@ struct CudaGraphFuser {
       bchunk = promoteChunkToBroadcastingChunk(chunk);
     }
     size_t nchunks = bchunk->i(attr::chunks);
-    std::cout << " check bchunk node: " << *bchunk << std::endl;
 
     TORCH_INTERNAL_ASSERT(nchunks > 0, "number of chunks cannot be zero");
     WithInsertPoint guard(bchunk->next());
@@ -575,8 +574,6 @@ struct CudaGraphFuser {
 
     // We have asserted single output earlier
     auto producer_output_sizes = producer_for_chunk_node->output()->type()->cast<TensorType>()->sizes();
-
-    std::cout << "check producer node: " << *producer_for_chunk_node << std::endl;
 
     for (auto input : producer_for_chunk_node->inputs()) {
       // XXX: we only work with pointwise ops in here, so we know it is valid to
@@ -612,10 +609,7 @@ struct CudaGraphFuser {
       auto input_type = input->type()->cast<TensorType>();
       auto input_sizes = input_type->sizes();
       auto input_strides = input_type->strides();
-      std::cout << "checking input from: " << input->node() << std::endl;
-      printf("is complete: %d, %d, %d,", producer_output_sizes.isComplete() ,input_sizes.isComplete() ,input_strides.isComplete());
       if (producer_output_sizes.isComplete() && input_sizes.isComplete() && input_strides.isComplete()) {
-        printf("is complete!\n");
         auto input_c_sizes = input_sizes.concrete_sizes().value();
         auto input_c_strides = input_strides.concrete_sizes().value();
         auto output_c_sizes = producer_output_sizes.concrete_sizes().value();
@@ -630,14 +624,12 @@ struct CudaGraphFuser {
           } else {
             strides[output_index] = input_c_strides[input_index];
           }
-          printf("setting strides: %d, %zu\n", output_index, strides[output_index]);
         }
 
         // continue expanding strides
         while (output_index >= 0) {
           strides[output_index] = output_c_sizes[output_index] == 1 ?
               strides[output_index+1] : 0;
-          printf("setting strides: %d, %zu\n", output_index, strides[output_index]);
           output_index--;
         }
       }
@@ -646,10 +638,8 @@ struct CudaGraphFuser {
         Value* input_chunk_sel = bchunk->addOutput();
         auto chunk_sel_type = chunk_sel->type()->cast<TensorType>();
         if (strides.empty() || !chunk_sel_type->sizes().isComplete()) {
-          printf("copying output with type\n");
           input_chunk_sel->setType(chunk_sel_type);
         } else {
-          printf("setting output with stride\n");
           input_chunk_sel->setType(chunk_sel_type->withSizesStrides(chunk_sel_type->sizes().concrete_sizes().value(), strides));
         }
         chunked_inputs.back().push_back(input_chunk_sel);

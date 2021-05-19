@@ -325,21 +325,6 @@ auto debugPrint = [](const TensorTypePtr& type) {
               const at::Tensor& tensor = inputs[i].toTensor();
 
               if (!fuser::cuda::complyWith(tensor, guard_tensor_type)) {
-                printf(" --x-- CudaFusionGuard check failed\n");
-                auto ndim = tensor.ndimension();
-                std::cout << "tensor: " << ndim;
-                std::cout << " size: ";
-                const auto& t_sizes = tensor.sizes();
-                const auto& t_strides = tensor.strides();
-                for (int i = 0; i < ndim; i++) {
-                  std::cout << t_sizes[i] << ", ";
-                }
-                std::cout << std::endl << " strides: ";
-                for (int i = 0; i < ndim; i++) {
-                  std::cout << t_strides[i] << ", ";
-                }
-                std::cout << std::endl;
-                
                 //debugPrint(tensor.type());
                 std::cout << "guard: " << std::endl;
                 debugPrint(guard_tensor_type);
@@ -350,7 +335,6 @@ auto debugPrint = [](const TensorTypePtr& type) {
 
             // TODO: check type and return the right flag
             // naively return true;
-            printf(" --v-- CudaFusionGuard check succeeded\n");
             push(stack, IValue(true));
             return;
           };
