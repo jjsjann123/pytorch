@@ -557,7 +557,6 @@ struct CudaGraphFuser {
       bchunk = promoteChunkToBroadcastingChunk(chunk);
     }
     size_t nchunks = bchunk->i(attr::chunks);
-
     TORCH_INTERNAL_ASSERT(nchunks > 0, "number of chunks cannot be zero");
     WithInsertPoint guard(bchunk->next());
 
